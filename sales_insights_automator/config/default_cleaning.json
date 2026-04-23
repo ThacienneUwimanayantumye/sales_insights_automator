@@ -1,0 +1,25 @@
+{
+  "_comment": "Default cleaning rules for the sales dataset. Edit this file to change cleaning behaviour — no Python required.",
+
+  "normalize_columns": true,
+  "drop_duplicates": true,
+  "duplicate_subset": ["order_id"],
+
+  "drop_columns": [],
+
+  "fill_missing": {
+    "region":    "Unknown",
+    "sales_rep": "Unassigned",
+    "revenue":   "median",
+    "quantity":  "median",
+    "discount_pct": 0.0
+  },
+
+  "type_conversions": {
+    "date":         "datetime",
+    "quantity":     "int",
+    "unit_price":   "float",
+    "discount_pct": "float",
+    "revenue":      "float"
+  }
+}

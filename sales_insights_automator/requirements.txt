@@ -1,0 +1,23 @@
+# ── Core data stack ───────────────────────────────────────────────────────────
+pandas>=2.2.0
+numpy>=1.26.0
+
+# ── AI layer (Stage 4) ────────────────────────────────────────────────────────
+openai>=1.30.0
+
+# ── UI layer (Stage 5) ────────────────────────────────────────────────────────
+streamlit>=1.35.0
+
+# ── Kaggle connector ──────────────────────────────────────────────────────────
+kaggle>=1.6.0
+
+# ── Google Drive connector (stub — install when implementing) ─────────────────
+# google-api-python-client>=2.130.0
+# google-auth-oauthlib>=1.2.0
+# google-auth-httplib2>=0.2.0
+
+# ── Environment variable management ──────────────────────────────────────────
+python-dotenv>=1.0.0
+
+# ── Dev / testing ─────────────────────────────────────────────────────────────
+pytest>=8.2.0

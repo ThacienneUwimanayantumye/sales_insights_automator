@@ -1,0 +1,464 @@
+{
+  "generated_at": "2026-04-16T23:29:25.985667",
+  "date_range": {
+    "from": "2024-01-01",
+    "to": "2024-12-30"
+  },
+  "row_count": 500,
+  "summary_stats": {
+    "total_revenue": 956745.51,
+    "total_orders": 500,
+    "total_units_sold": 2770,
+    "average_order_value": 1913.49,
+    "average_unit_price": 371.02,
+    "average_discount_pct": 7.54,
+    "median_order_value": 899.41,
+    "min_order_value": 42.49,
+    "max_order_value": 12080.7
+  },
+  "discount_stats": {
+    "avg_discount_pct": 7.54,
+    "max_discount_pct": 15.0,
+    "orders_with_discount": 483,
+    "discount_rate": 0.966,
+    "revenue_lost_to_discount": 78273.51
+  },
+  "trend_summary": {
+    "best_month": "2024-10",
+    "worst_month": "2024-09",
+    "best_month_revenue": 151916.51,
+    "worst_month_revenue": 45584.7,
+    "overall_growth_pct": -35.42,
+    "avg_monthly_revenue": 79728.79,
+    "months_with_growth": 4,
+    "months_with_decline": 7
+  },
+  "revenue_by_region": [
+    {
+      "region": "West",
+      "total_revenue": 214653.9,
+      "order_count": 116,
+      "total_units": 638,
+      "revenue_share_pct": 22.44
+    },
+    {
+      "region": "East",
+      "total_revenue": 208688.15,
+      "order_count": 112,
+      "total_units": 617,
+      "revenue_share_pct": 21.81
+    },
+    {
+      "region": "South",
+      "total_revenue": 204819.61,
+      "order_count": 102,
+      "total_units": 584,
+      "revenue_share_pct": 21.41
+    },
+    {
+      "region": "Central",
+      "total_revenue": 191158.64,
+      "order_count": 84,
+      "total_units": 450,
+      "revenue_share_pct": 19.98
+    },
+    {
+      "region": "North",
+      "total_revenue": 137425.21,
+      "order_count": 86,
+      "total_units": 481,
+      "revenue_share_pct": 14.36
+    }
+  ],
+  "revenue_by_product": [
+    {
+      "product": "Laptop Pro 15",
+      "total_revenue": 267645.96,
+      "order_count": 39,
+      "total_units": 223,
+      "revenue_share_pct": 27.97
+    },
+    {
+      "product": "Standing Desk",
+      "total_revenue": 188524.05,
+      "order_count": 49,
+      "total_units": 255,
+      "revenue_share_pct": 19.7
+    },
+    {
+      "product": "Ergonomic Chair",
+      "total_revenue": 148528.04,
+      "order_count": 43,
+      "total_units": 269,
+      "revenue_share_pct": 15.52
+    },
+    {
+      "product": "Monitor 27in",
+      "total_revenue": 114014.57,
+      "order_count": 49,
+      "total_units": 273,
+      "revenue_share_pct": 11.92
+    },
+    {
+      "product": "Noise-Cancelling Headphones",
+      "total_revenue": 98362.16,
+      "order_count": 58,
+      "total_units": 306,
+      "revenue_share_pct": 10.28
+    },
+    {
+      "product": "Webcam HD",
+      "total_revenue": 37529.97,
+      "order_count": 55,
+      "total_units": 311,
+      "revenue_share_pct": 3.92
+    },
+    {
+      "product": "Mechanical Keyboard",
+      "total_revenue": 34197.72,
+      "order_count": 44,
+      "total_units": 235,
+      "revenue_share_pct": 3.57
+    },
+    {
+      "product": "SSD 1TB",
+      "total_revenue": 26942.01,
+      "order_count": 53,
+      "total_units": 264,
+      "revenue_share_pct": 2.82
+    },
+    {
+      "product": "Wireless Keyboard",
+      "total_revenue": 26691.91,
+      "order_count": 57,
+      "total_units": 322,
+      "revenue_share_pct": 2.79
+    },
+    {
+      "product": "USB-C Hub",
+      "total_revenue": 14309.12,
+      "order_count": 53,
+      "total_units": 312,
+      "revenue_share_pct": 1.5
+    }
+  ],
+  "revenue_by_category": [
+    {
+      "category": "Furniture",
+      "total_revenue": 337052.09,
+      "order_count": 92,
+      "total_units": 524,
+      "revenue_share_pct": 35.23
+    },
+    {
+      "category": "Computers",
+      "total_revenue": 267645.96,
+      "order_count": 39,
+      "total_units": 223,
+      "revenue_share_pct": 27.97
+    },
+    {
+      "category": "Displays",
+      "total_revenue": 114014.57,
+      "order_count": 49,
+      "total_units": 273,
+      "revenue_share_pct": 11.92
+    },
+    {
+      "category": "Peripherals",
+      "total_revenue": 98419.6,
+      "order_count": 156,
+      "total_units": 868,
+      "revenue_share_pct": 10.29
+    },
+    {
+      "category": "Audio",
+      "total_revenue": 98362.16,
+      "order_count": 58,
+      "total_units": 306,
+      "revenue_share_pct": 10.28
+    },
+    {
+      "category": "Storage",
+      "total_revenue": 26942.01,
+      "order_count": 53,
+      "total_units": 264,
+      "revenue_share_pct": 2.82
+    },
+    {
+      "category": "Accessories",
+      "total_revenue": 14309.12,
+      "order_count": 53,
+      "total_units": 312,
+      "revenue_share_pct": 1.5
+    }
+  ],
+  "revenue_by_sales_rep": [
+    {
+      "sales_rep": "Eva Rossi",
+      "total_revenue": 192995.71,
+      "order_count": 98,
+      "avg_order_value": 1969.34,
+      "avg_discount_pct": 7.29,
+      "total_units": 526,
+      "revenue_share_pct": 20.17
+    },
+    {
+      "sales_rep": "Carla Diaz",
+      "total_revenue": 162457.22,
+      "order_count": 90,
+      "avg_order_value": 1805.08,
+      "avg_discount_pct": 7.3,
+      "total_units": 511,
+      "revenue_share_pct": 16.98
+    },
+    {
+      "sales_rep": "Alice Martin",
+      "total_revenue": 159259.8,
+      "order_count": 77,
+      "avg_order_value": 2068.31,
+      "avg_discount_pct": 7.66,
+      "total_units": 423,
+      "revenue_share_pct": 16.65
+    },
+    {
+      "sales_rep": "Bob Chen",
+      "total_revenue": 156201.07,
+      "order_count": 84,
+      "avg_order_value": 1859.54,
+      "avg_discount_pct": 7.39,
+      "total_units": 485,
+      "revenue_share_pct": 16.33
+    },
+    {
+      "sales_rep": "Frank Okafor",
+      "total_revenue": 145294.26,
+      "order_count": 75,
+      "avg_order_value": 1937.26,
+      "avg_discount_pct": 8.13,
+      "total_units": 394,
+      "revenue_share_pct": 15.19
+    },
+    {
+      "sales_rep": "David Kim",
+      "total_revenue": 140537.45,
+      "order_count": 76,
+      "avg_order_value": 1849.18,
+      "avg_discount_pct": 7.62,
+      "total_units": 431,
+      "revenue_share_pct": 14.69
+    }
+  ],
+  "monthly_trend": [
+    {
+      "month": "2024-01",
+      "total_revenue": 98530.5,
+      "total_units": 231,
+      "order_count": 37,
+      "mom_growth_abs": NaN,
+      "mom_growth_pct": NaN,
+      "rolling_3m_avg_revenue": 98530.5
+    },
+    {
+      "month": "2024-02",
+      "total_revenue": 65948.37,
+      "total_units": 223,
+      "order_count": 40,
+      "mom_growth_abs": -32582.13,
+      "mom_growth_pct": -33.07,
+      "rolling_3m_avg_revenue": 82239.44
+    },
+    {
+      "month": "2024-03",
+      "total_revenue": 96957.77,
+      "total_units": 240,
+      "order_count": 39,
+      "mom_growth_abs": 31009.4,
+      "mom_growth_pct": 47.02,
+      "rolling_3m_avg_revenue": 87145.55
+    },
+    {
+      "month": "2024-04",
+      "total_revenue": 79111.64,
+      "total_units": 210,
+      "order_count": 34,
+      "mom_growth_abs": -17846.13,
+      "mom_growth_pct": -18.41,
+      "rolling_3m_avg_revenue": 80672.59
+    },
+    {
+      "month": "2024-05",
+      "total_revenue": 60088.68,
+      "total_units": 198,
+      "order_count": 39,
+      "mom_growth_abs": -19022.96,
+      "mom_growth_pct": -24.05,
+      "rolling_3m_avg_revenue": 78719.36
+    },
+    {
+      "month": "2024-06",
+      "total_revenue": 50282.92,
+      "total_units": 234,
+      "order_count": 43,
+      "mom_growth_abs": -9805.76,
+      "mom_growth_pct": -16.32,
+      "rolling_3m_avg_revenue": 63161.08
+    },
+    {
+      "month": "2024-07",
+      "total_revenue": 77573.09,
+      "total_units": 246,
+      "order_count": 41,
+      "mom_growth_abs": 27290.17,
+      "mom_growth_pct": 54.27,
+      "rolling_3m_avg_revenue": 62648.23
+    },
+    {
+      "month": "2024-08",
+      "total_revenue": 92202.99,
+      "total_units": 215,
+      "order_count": 42,
+      "mom_growth_abs": 14629.9,
+      "mom_growth_pct": 18.86,
+      "rolling_3m_avg_revenue": 73353.0
+    },
+    {
+      "month": "2024-09",
+      "total_revenue": 45584.7,
+      "total_units": 156,
+      "order_count": 31,
+      "mom_growth_abs": -46618.29,
+      "mom_growth_pct": -50.56,
+      "rolling_3m_avg_revenue": 71786.93
+    },
+    {
+      "month": "2024-10",
+      "total_revenue": 151916.51,
+      "total_units": 398,
+      "order_count": 76,
+      "mom_growth_abs": 106331.81,
+      "mom_growth_pct": 233.26,
+      "rolling_3m_avg_revenue": 96568.07
+    },
+    {
+      "month": "2024-11",
+      "total_revenue": 74912.98,
+      "total_units": 214,
+      "order_count": 39,
+      "mom_growth_abs": -77003.53,
+      "mom_growth_pct": -50.69,
+      "rolling_3m_avg_revenue": 90804.73
+    },
+    {
+      "month": "2024-12",
+      "total_revenue": 63635.36,
+      "total_units": 205,
+      "order_count": 39,
+      "mom_growth_abs": -11277.62,
+      "mom_growth_pct": -15.05,
+      "rolling_3m_avg_revenue": 96821.62
+    }
+  ],
+  "best_months": [
+    {
+      "month": "2024-10",
+      "total_revenue": 151916.51,
+      "total_units": 398,
+      "order_count": 76,
+      "mom_growth_abs": 106331.81,
+      "mom_growth_pct": 233.26,
+      "rolling_3m_avg_revenue": 96568.07
+    },
+    {
+      "month": "2024-01",
+      "total_revenue": 98530.5,
+      "total_units": 231,
+      "order_count": 37,
+      "mom_growth_abs": NaN,
+      "mom_growth_pct": NaN,
+      "rolling_3m_avg_revenue": 98530.5
+    },
+    {
+      "month": "2024-03",
+      "total_revenue": 96957.77,
+      "total_units": 240,
+      "order_count": 39,
+      "mom_growth_abs": 31009.4,
+      "mom_growth_pct": 47.02,
+      "rolling_3m_avg_revenue": 87145.55
+    }
+  ],
+  "worst_months": [
+    {
+      "month": "2024-09",
+      "total_revenue": 45584.7,
+      "total_units": 156,
+      "order_count": 31,
+      "mom_growth_abs": -46618.29,
+      "mom_growth_pct": -50.56,
+      "rolling_3m_avg_revenue": 71786.93
+    },
+    {
+      "month": "2024-06",
+      "total_revenue": 50282.92,
+      "total_units": 234,
+      "order_count": 43,
+      "mom_growth_abs": -9805.76,
+      "mom_growth_pct": -16.32,
+      "rolling_3m_avg_revenue": 63161.08
+    },
+    {
+      "month": "2024-05",
+      "total_revenue": 60088.68,
+      "total_units": 198,
+      "order_count": 39,
+      "mom_growth_abs": -19022.96,
+      "mom_growth_pct": -24.05,
+      "rolling_3m_avg_revenue": 78719.36
+    }
+  ],
+  "revenue_by_weekday": [
+    {
+      "day_of_week": "Monday",
+      "total_revenue": 128607.78,
+      "order_count": 78,
+      "avg_order_value": 1648.82
+    },
+    {
+      "day_of_week": "Tuesday",
+      "total_revenue": 148846.78,
+      "order_count": 73,
+      "avg_order_value": 2039.0
+    },
+    {
+      "day_of_week": "Wednesday",
+      "total_revenue": 120015.76,
+      "order_count": 66,
+      "avg_order_value": 1818.42
+    },
+    {
+      "day_of_week": "Thursday",
+      "total_revenue": 148527.32,
+      "order_count": 70,
+      "avg_order_value": 2121.82
+    },
+    {
+      "day_of_week": "Friday",
+      "total_revenue": 137556.22,
+      "order_count": 57,
+      "avg_order_value": 2413.27
+    },
+    {
+      "day_of_week": "Saturday",
+      "total_revenue": 129423.35,
+      "order_count": 70,
+      "avg_order_value": 1848.9
+    },
+    {
+      "day_of_week": "Sunday",
+      "total_revenue": 143768.3,
+      "order_count": 86,
+      "avg_order_value": 1671.72
+    }
+  ]
+}
