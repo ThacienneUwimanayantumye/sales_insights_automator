@@ -30,6 +30,7 @@ Usage
         print(f"Tokens used: {response.total_tokens}")
 """
 
+import os
 import time
 from dataclasses import dataclass
 
@@ -108,13 +109,15 @@ class LLMClient:
 
     def __init__(
         self,
-        api_key:     str   = OPENAI_API_KEY,
+        api_key:     str   = "",
         model:       str   = OPENAI_MODEL,
         max_tokens:  int   = OPENAI_MAX_TOKENS,
         temperature: float = 0.4,
         max_retries: int   = 3,
     ) -> None:
-        self.api_key     = api_key
+        # Read the key fresh from the environment at instantiation time so
+        # load_dotenv() calls that happen after module import are honoured.
+        self.api_key     = api_key or os.getenv("OPENAI_API_KEY", "")
         self.model       = model
         self.max_tokens  = max_tokens
         self.temperature = temperature

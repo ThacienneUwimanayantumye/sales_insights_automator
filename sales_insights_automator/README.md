@@ -13,15 +13,15 @@ insights using the OpenAI API.
 ## Architecture Overview
 
 ```
-┌──────────────────────────────────────────────────────────────────────┐
-│                          Pipeline Stages                             │
-│                                                                      │
-│  1. Ingestion → 1b. Profiling → 2. Cleaning → 3. Analysis → 4. AI  │
-│                 (data quality         ↑ informed by profile           │
-│                  report)                                             │
-│                                                                      │
-│  Output:  CLI (MVP)  │  Streamlit UI (later)                         │
-└──────────────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────────────┐
+│                             Pipeline Stages                               │
+│                                                                           │
+│  1. Ingestion → 1b. Profiling → 2. Cleaning → 3. Analysis → 4. AI       │
+│                 (data quality          ↑ informed by profile              │
+│                  report)                                                  │
+│                                                                           │
+│  Output:  CLI (demo scripts)  │  Streamlit UI (app/)                     │
+└───────────────────────────────────────────────────────────────────────────┘
 ```
 
 Each stage is a self-contained Python module.  No stage knows about the
@@ -94,10 +94,35 @@ python scripts/create_sample_data.py
 python scripts/demo_ingestion.py
 ```
 
-### 5. Run the test suite
+### 5. Launch the Streamlit UI
+
+```bash
+streamlit run app/main.py
+```
+
+Open [http://localhost:8501](http://localhost:8501) in your browser.
+
+### 6. Run the test suite
 
 ```bash
 pytest tests/ -v
+```
+
+---
+
+## Streamlit UI
+
+The web interface provides a complete guided workflow across 4 pages:
+
+| Page | What it does |
+|---|---|
+| **📂 Upload & Profile** | Upload a CSV, see a full data quality report with quality score, null analysis, outlier flags, and cleaning recommendations |
+| **🔧 Schema Setup** | Auto-detects which column is revenue, date, region, etc. Confirm with dropdowns — no JSON files needed |
+| **📈 Dashboard** | Interactive Plotly charts: monthly trend, revenue by region/product/category/rep, discount gauge, day-of-week pattern, regional multi-line trend |
+| **🤖 AI Insights** | Generate AI-written business reports with privacy controls. Choose from Full Report, Executive Summary, Recommendations, or Anomaly Detection |
+
+```bash
+streamlit run app/main.py
 ```
 
 ---
