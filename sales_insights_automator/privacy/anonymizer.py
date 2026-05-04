@@ -158,7 +158,7 @@ class DataAnonymizer:
         label_prefix: str,
     ) -> pd.DataFrame:
         """Replace all values in ``column`` with ``label_prefix A/B/C/...``."""
-        if df.empty or column not in df.columns:
+        if df is None or df.empty or column not in df.columns:
             return df
 
         df = df.copy()
@@ -191,7 +191,9 @@ class DataAnonymizer:
             "revenue_by_category", "revenue_by_sales_rep",
         ]:
             df = getattr(result, attr)
-            if not df.empty and revenue_col in df.columns:
+            if df is None or df.empty:
+                continue
+            if revenue_col in df.columns:
                 df = df.copy()
                 df[revenue_col] = (df[revenue_col] / precision).round() * precision
                 setattr(result, attr, df)
@@ -211,7 +213,7 @@ class DataAnonymizer:
         """Replace the exact date range with a generic label."""
         result.date_range = {"from": "Period Start", "to": "Period End"}
 
-        if not result.monthly_trend.empty and "month" in result.monthly_trend.columns:
+        if result.monthly_trend is not None and not result.monthly_trend.empty and "month" in result.monthly_trend.columns:
             trend = result.monthly_trend.copy()
             trend["month"] = [
                 f"Month {i+1}" for i in range(len(trend))

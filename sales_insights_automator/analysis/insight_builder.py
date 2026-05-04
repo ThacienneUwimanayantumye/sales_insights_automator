@@ -116,7 +116,9 @@ class AnalysisResult:
         lines.append("--- KEY PERFORMANCE INDICATORS ---")
         for k, v in self.summary_stats.items():
             label = k.replace("_", " ").title()
-            if "revenue" in k or "value" in k:
+            if v is None:
+                lines.append(f"  {label:<30}: N/A")
+            elif "revenue" in k or "value" in k or "price" in k:
                 lines.append(f"  {label:<30}: ${v:,.2f}")
             elif "pct" in k or "rate" in k:
                 lines.append(f"  {label:<30}: {v}%")
@@ -146,16 +148,19 @@ class AnalysisResult:
 
         # ── Discount analysis ─────────────────────────────────────────
         lines.append("--- DISCOUNT ANALYSIS ---")
-        for k, v in self.discount_stats.items():
-            label = k.replace("_", " ").title()
-            if "revenue" in k:
-                lines.append(f"  {label:<35}: ${v:,.2f}")
-            elif "pct" in k:
-                lines.append(f"  {label:<35}: {v}%")
-            elif "rate" in k:
-                lines.append(f"  {label:<35}: {v:.1%}")
-            else:
-                lines.append(f"  {label:<35}: {v}")
+        if self.discount_stats:
+            for k, v in self.discount_stats.items():
+                label = k.replace("_", " ").title()
+                if "revenue" in k:
+                    lines.append(f"  {label:<35}: ${v:,.2f}")
+                elif "pct" in k:
+                    lines.append(f"  {label:<35}: {v}%")
+                elif "rate" in k:
+                    lines.append(f"  {label:<35}: {v:.1%}")
+                else:
+                    lines.append(f"  {label:<35}: {v}")
+        else:
+            lines.append("  (no discount data in this dataset)")
         lines.append("")
 
         # ── Monthly trends ────────────────────────────────────────────
@@ -201,8 +206,15 @@ class AnalysisResult:
 
         DataFrames are converted to lists-of-dicts (record orientation).
         """
-        def df_to_records(df: pd.DataFrame) -> list:
-            return df.where(pd.notnull(df), None).to_dict(orient="records")
+        def df_to_records(df) -> list:
+            if df is None:
+                return []
+            try:
+                if df.empty:
+                    return []
+                return df.where(pd.notnull(df), None).to_dict(orient="records")
+            except (AttributeError, TypeError):
+                return []
 
         return {
             "generated_at":       self.generated_at.isoformat(),
@@ -234,13 +246,18 @@ class AnalysisResult:
     # ------------------------------------------------------------------ #
 
     @staticmethod
-    def _df_to_text(df: pd.DataFrame, max_rows: int) -> str:
+    def _df_to_text(df, max_rows: int) -> str:
         """Render a DataFrame as a compact, fixed-width text table."""
-        if df.empty:
-            return "  (no data)"
-        display = df.head(max_rows)
-        rows = display.to_string(index=False).split("\n")
-        return "\n".join(f"  {r}" for r in rows)
+        if df is None:
+            return "  (not available for this dataset)"
+        try:
+            if df.empty:
+                return "  (no data)"
+            display = df.head(max_rows)
+            rows = display.to_string(index=False).split("\n")
+            return "\n".join(f"  {r}" for r in rows)
+        except (AttributeError, TypeError):
+            return "  (not available for this dataset)"
 
     def __repr__(self) -> str:
         return (

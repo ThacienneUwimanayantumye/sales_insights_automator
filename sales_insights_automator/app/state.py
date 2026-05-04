@@ -48,7 +48,7 @@ def clear_downstream(from_key: str) -> None:
     """
     cascade = {
         RAW_DF:          [PROFILE, SCHEMA, CLEAN_DF, CLEANING_REPORT,
-                          ANALYSIS_RESULT, INSIGHT_REPORT],
+                          ANALYSIS_RESULT, INSIGHT_REPORT, "wizard_mapping"],
         SCHEMA:          [CLEAN_DF, CLEANING_REPORT,
                           ANALYSIS_RESULT, INSIGHT_REPORT],
         ANALYSIS_RESULT: [INSIGHT_REPORT],

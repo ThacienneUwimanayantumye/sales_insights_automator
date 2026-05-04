@@ -62,7 +62,8 @@ import pandas as pd
 REQUIRED_ROLES = ("order_id", "date", "revenue")
 
 OPTIONAL_ROLES = ("product", "category", "region", "sales_rep",
-                  "quantity", "unit_price", "discount")
+                  "quantity", "unit_price", "discount",
+                  "customer_id", "gender", "age")
 
 ALL_ROLES = REQUIRED_ROLES + OPTIONAL_ROLES
 
@@ -73,16 +74,19 @@ STANDARD_NAMES: dict = {role: role for role in ALL_ROLES}
 STANDARD_NAMES["discount"] = "discount_pct"
 
 ROLE_DESCRIPTIONS = {
-    "order_id":   "Unique identifier per transaction (e.g. order ID, receipt number)",
-    "date":       "Transaction date / timestamp",
-    "revenue":    "Monetary value per transaction (sales amount, total, amount paid)",
-    "product":    "Product name, SKU, or item description",
-    "category":   "Product category, group, or department",
-    "region":     "Sales territory, area, zone, or branch",
-    "sales_rep":  "Salesperson name or employee ID",
-    "quantity":   "Number of units sold per transaction",
-    "unit_price": "Price per individual unit (before discount)",
-    "discount":   "Discount applied (0.0–1.0 fraction, or percentage)",
+    "order_id":     "Unique identifier per transaction (e.g. order ID, receipt number)",
+    "date":         "Transaction date / timestamp",
+    "revenue":      "Monetary value per transaction (sales amount, total, amount paid)",
+    "product":      "Product name, SKU, or item description",
+    "category":     "Product category, group, or department",
+    "region":       "Sales territory, area, zone, or branch",
+    "sales_rep":    "Salesperson name or employee ID",
+    "quantity":     "Number of units sold per transaction",
+    "unit_price":   "Price per individual unit (before discount)",
+    "discount":     "Discount applied (0.0–1.0 fraction, or percentage)",
+    "customer_id":  "Unique identifier per customer (enables repeat-purchase analysis)",
+    "gender":       "Customer gender (e.g. Male / Female) — used for demographic breakdowns",
+    "age":          "Customer age in years (numeric) — used for age-group breakdowns",
 }
 
 
@@ -104,18 +108,23 @@ class SchemaConfig:
     """
 
     # Required
-    order_id:   Optional[str] = "order_id"
-    date:       Optional[str] = "date"
-    revenue:    Optional[str] = "revenue"
+    order_id:    Optional[str] = "order_id"
+    date:        Optional[str] = "date"
+    revenue:     Optional[str] = "revenue"
 
-    # Optional
-    product:    Optional[str] = "product"
-    category:   Optional[str] = "category"
-    region:     Optional[str] = "region"
-    sales_rep:  Optional[str] = "sales_rep"
-    quantity:   Optional[str] = "quantity"
-    unit_price: Optional[str] = "unit_price"
-    discount:   Optional[str] = "discount_pct"
+    # Optional — sales dimensions
+    product:     Optional[str] = "product"
+    category:    Optional[str] = "category"
+    region:      Optional[str] = "region"
+    sales_rep:   Optional[str] = "sales_rep"
+    quantity:    Optional[str] = "quantity"
+    unit_price:  Optional[str] = "unit_price"
+    discount:    Optional[str] = "discount_pct"
+
+    # Optional — customer demographics
+    customer_id: Optional[str] = "customer_id"
+    gender:      Optional[str] = "gender"
+    age:         Optional[str] = "age"
 
     # ------------------------------------------------------------------ #
     # Core API                                                            #

@@ -156,18 +156,21 @@ class SalesAnalyzer:
         else:
             date_range = {"from": "unknown", "to": "unknown"}
 
+        has_col = lambda col: col in df.columns   # noqa: E731
+
         # ── Step 1: Summary KPIs ──────────────────────────────────────
         print("[SalesAnalyzer] Computing summary statistics...")
         summary_stats = m.compute_summary_stats(df)
 
-        # ── Step 2: Revenue breakdowns ────────────────────────────────
+        # ── Step 2: Revenue breakdowns (optional columns) ─────────────
         print("[SalesAnalyzer] Computing revenue breakdowns...")
-        rev_by_region   = m.revenue_by_region(df)
-        rev_by_product  = m.revenue_by_product(df)
-        rev_by_category = m.revenue_by_category(df)
-        rev_by_rep      = m.sales_rep_performance(df)
+        rev_by_region   = m.revenue_by_region(df)   if has_col(m.COL_REGION)    else None
+        rev_by_product  = m.revenue_by_product(df)  if has_col(m.COL_PRODUCT)   else None
+        rev_by_category = m.revenue_by_category(df) if has_col(m.COL_CATEGORY)  else None
+        rev_by_rep      = m.sales_rep_performance(df) if has_col(m.COL_SALES_REP) else None
 
-        # ── Step 3: Discount analysis ─────────────────────────────────
+        # ── Step 3: Discount analysis (optional) ──────────────────────
+        # discount_analysis() already returns None if discount_pct is absent
         print("[SalesAnalyzer] Computing discount analysis...")
         discount_stats = m.discount_analysis(df)
 
@@ -183,9 +186,11 @@ class SalesAnalyzer:
         print("[SalesAnalyzer] Computing day-of-week pattern...")
         dow = t.revenue_by_day_of_week(df)
 
-        # ── Step 6: Regional monthly trend ───────────────────────────
+        # ── Step 6: Regional monthly trend (optional) ─────────────────
         print("[SalesAnalyzer] Computing regional monthly trend...")
-        regional_trend = t.monthly_revenue_by_region(df)
+        regional_trend = (
+            t.monthly_revenue_by_region(df) if has_col(m.COL_REGION) else None
+        )
 
         # ── Assemble ──────────────────────────────────────────────────
         result = AnalysisResult(

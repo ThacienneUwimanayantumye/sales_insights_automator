@@ -62,7 +62,8 @@ _NAME_PATTERNS: Dict[str, List[str]] = {
                    "value", "amt"],
     "product":    ["product", "item", "sku", "article", "goods",
                    "product_name", "item_name", "description"],
-    "category":   ["category", "type", "group", "segment", "dept",
+    "category":   ["category", "product_category", "product_cat",
+                   "type", "group", "segment", "dept",
                    "department", "class", "product_type", "product_group"],
     "region":     ["region", "area", "territory", "zone", "location",
                    "country", "state", "branch", "market", "geo"],
@@ -75,6 +76,11 @@ _NAME_PATTERNS: Dict[str, List[str]] = {
                    "price_per_unit", "selling_price", "list_price"],
     "discount":   ["discount", "disc", "reduction", "markdown",
                    "discount_pct", "discount_rate"],
+    "customer_id":["customer_id", "customer", "client_id", "client",
+                   "buyer_id", "cust_id", "member_id", "user_id"],
+    "gender":     ["gender", "sex", "male_female", "m_f", "customer_gender"],
+    "age":        ["age", "age_years", "customer_age", "buyer_age",
+                   "age_at_purchase"],
 }
 
 _DTYPE_KINDS: Dict[str, List[str]] = {
@@ -87,7 +93,10 @@ _DTYPE_KINDS: Dict[str, List[str]] = {
     "sales_rep":  ["categorical"],
     "quantity":   ["numeric"],
     "unit_price": ["numeric"],
-    "discount":   ["numeric"],
+    "discount":    ["numeric"],
+    "customer_id": ["categorical"],
+    "gender":      ["categorical"],
+    "age":         ["numeric"],
 }
 
 # Expected cardinality range as fraction of total rows (min, max)
@@ -101,7 +110,10 @@ _CARDINALITY_RANGE: Dict[str, Tuple[float, float]] = {
     "sales_rep":  (0.001, 0.15),  # small team
     "quantity":   (0.001, 0.30),  # small range of integers
     "unit_price": (0.001, 0.30),  # limited price points
-    "discount":   (0.001, 0.20),  # limited discount tiers
+    "discount":    (0.001, 0.20),  # limited discount tiers
+    "customer_id": (0.01,  0.95),  # many customers, may repeat across transactions
+    "gender":      (0.001, 0.02),  # very few distinct values (e.g. Male/Female)
+    "age":         (0.02,  0.80),  # moderate range of integer ages
 }
 
 
@@ -220,20 +232,25 @@ class SchemaWizard:
         col_lower = col.lower().replace(" ", "_")
 
         # ── Name match ────────────────────────────────────────────────
-        # Exact match scores highest
+        # Exact role name: highest score
         if col_lower == role or col_lower == role.replace("_", ""):
             score += 5.0
         else:
-            for pattern in _NAME_PATTERNS.get(role, []):
-                if pattern in col_lower:
-                    score += 3.0
-                    break
+            patterns = _NAME_PATTERNS.get(role, [])
+            # Exact pattern match (column name equals a known alias)
+            if col_lower in patterns:
+                score += 4.5
             else:
-                # Partial word match (e.g. "sale" matches "total_sales")
-                role_words = set(re.split(r"[_\s]", role))
-                col_words  = set(re.split(r"[_\s]", col_lower))
-                if role_words & col_words:
-                    score += 1.0
+                for pattern in patterns:
+                    if pattern in col_lower:
+                        score += 3.0
+                        break
+                else:
+                    # Partial word match (e.g. "sale" matches "total_sales")
+                    role_words = set(re.split(r"[_\s]", role))
+                    col_words  = set(re.split(r"[_\s]", col_lower))
+                    if role_words & col_words:
+                        score += 1.0
 
         # ── dtype match ───────────────────────────────────────────────
         if info["kind"] in _DTYPE_KINDS.get(role, []):
@@ -265,14 +282,28 @@ class SchemaWizard:
     ) -> Dict[str, Optional[str]]:
         """Assign each role to its highest-scoring unassigned column.
 
-        Required roles are assigned first.  A role is set to None if no
-        column exceeds ``min_confidence``.
+        Required roles are assigned first (in fixed order).  Optional roles
+        are then processed in descending order of their *best achievable score*
+        so that high-confidence specific matches (e.g. "gender" → gender role,
+        score 5.0) are locked in before low-confidence generic ones
+        (e.g. "gender" column → region role, score 2.0) can grab them.
+
+        A role is set to None if no column exceeds ``min_confidence``.
         """
         assigned_cols: set = set()
         mapping: Dict[str, Optional[str]] = {role: None for role in ALL_ROLES}
 
-        role_order = list(REQUIRED_ROLES) + list(OPTIONAL_ROLES)
-        for role in role_order:
+        # Required roles in fixed order
+        required_order = list(REQUIRED_ROLES)
+
+        # Optional roles ordered by their peak score (best-match first)
+        optional_order = sorted(
+            OPTIONAL_ROLES,
+            key=lambda role: max(scores[role].values()) if scores[role] else 0,
+            reverse=True,
+        )
+
+        for role in required_order + optional_order:
             candidates = sorted(
                 scores[role].items(),
                 key=lambda kv: kv[1],

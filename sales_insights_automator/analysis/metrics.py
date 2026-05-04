@@ -40,30 +40,45 @@ COL_REVENUE     = "revenue"
 def compute_summary_stats(df: pd.DataFrame) -> Dict[str, float]:
     """Compute a single-row summary of the entire sales dataset.
 
+    Required columns : revenue, order_id
+    Optional columns : quantity, unit_price, discount_pct
+        — missing optional columns produce 0 / None in the output rather than
+          raising KeyError, so datasets that lack these columns still work.
+
     Returns
     -------
     dict with keys:
       total_revenue       — sum of all revenue
       total_orders        — number of distinct orders
-      total_units_sold    — sum of all quantities
+      total_units_sold    — sum of all quantities (0 if quantity absent)
       average_order_value — total_revenue / total_orders
-      average_unit_price  — mean unit price across all line items
-      average_discount_pct— mean discount percentage
+      average_unit_price  — mean unit price (None if unit_price absent)
+      average_discount_pct— mean discount % (0 if discount_pct absent)
       median_order_value  — median revenue per order
       min_order_value     — smallest single-order revenue
       max_order_value     — largest single-order revenue
     """
     total_revenue = float(df[COL_REVENUE].sum())
     total_orders  = int(df[COL_ORDER_ID].nunique())
-    total_units   = int(df[COL_QUANTITY].sum())
+
+    total_units = int(df[COL_QUANTITY].sum()) if COL_QUANTITY in df.columns else 0
+
+    avg_unit_price = (
+        round(float(df[COL_UNIT_PRICE].mean()), 2)
+        if COL_UNIT_PRICE in df.columns else None
+    )
+    avg_discount = (
+        round(float(df[COL_DISCOUNT].mean()) * 100, 2)
+        if COL_DISCOUNT in df.columns else 0.0
+    )
 
     return {
         "total_revenue":        round(total_revenue, 2),
         "total_orders":         total_orders,
         "total_units_sold":     total_units,
         "average_order_value":  round(total_revenue / total_orders, 2) if total_orders else 0.0,
-        "average_unit_price":   round(float(df[COL_UNIT_PRICE].mean()), 2),
-        "average_discount_pct": round(float(df[COL_DISCOUNT].mean()) * 100, 2),
+        "average_unit_price":   avg_unit_price,
+        "average_discount_pct": avg_discount,
         "median_order_value":   round(float(df[COL_REVENUE].median()), 2),
         "min_order_value":      round(float(df[COL_REVENUE].min()), 2),
         "max_order_value":      round(float(df[COL_REVENUE].max()), 2),
@@ -172,20 +187,29 @@ def top_n(
 def discount_analysis(df: pd.DataFrame) -> Dict[str, float]:
     """Quantify the impact of discounts on revenue.
 
+    Returns None if the discount_pct column is absent from the DataFrame,
+    so callers can gracefully skip discount reporting for datasets without it.
+
     Returns
     -------
-    dict with keys:
+    dict or None
       avg_discount_pct      — average discount across all orders
       max_discount_pct      — highest discount given
       orders_with_discount  — number of orders that had any discount
       discount_rate         — share of orders with a discount (0–1)
-      revenue_lost_to_discount — estimated revenue lost due to discounting
+      revenue_lost_to_discount — estimated revenue lost (requires unit_price
+                                 and quantity; 0 if either is absent)
     """
-    total_orders = len(df)
+    if COL_DISCOUNT not in df.columns:
+        return None
+
+    total_orders         = len(df)
     orders_with_discount = int((df[COL_DISCOUNT] > 0).sum())
 
-    # Gross revenue = what would have been earned without any discount
-    gross_revenue = float((df[COL_UNIT_PRICE] * df[COL_QUANTITY]).sum())
+    if COL_UNIT_PRICE in df.columns and COL_QUANTITY in df.columns:
+        gross_revenue = float((df[COL_UNIT_PRICE] * df[COL_QUANTITY]).sum())
+    else:
+        gross_revenue = float(df[COL_REVENUE].sum())
     actual_revenue = float(df[COL_REVENUE].sum())
 
     return {
@@ -202,22 +226,28 @@ def discount_analysis(df: pd.DataFrame) -> Dict[str, float]:
 def sales_rep_performance(df: pd.DataFrame) -> pd.DataFrame:
     """Detailed per-rep breakdown including average deal size and discount.
 
+    Optional columns: discount_pct, quantity — omitted from output if absent.
+
     Returns
     -------
     pd.DataFrame
         Columns: sales_rep, total_revenue, order_count, avg_order_value,
-                 avg_discount_pct, total_units, revenue_share_pct
+                 [avg_discount_pct], [total_units], revenue_share_pct
         Sorted by total_revenue descending.
     """
+    agg: Dict[str, object] = {
+        "total_revenue":   (COL_REVENUE,  "sum"),
+        "order_count":     (COL_ORDER_ID, "count"),
+        "avg_order_value": (COL_REVENUE,  "mean"),
+    }
+    if COL_DISCOUNT in df.columns:
+        agg["avg_discount_pct"] = (COL_DISCOUNT, "mean")
+    if COL_QUANTITY in df.columns:
+        agg["total_units"] = (COL_QUANTITY, "sum")
+
     result = (
         df.groupby(COL_SALES_REP)
-        .agg(
-            total_revenue   = (COL_REVENUE,  "sum"),
-            order_count     = (COL_ORDER_ID, "count"),
-            avg_order_value = (COL_REVENUE,  "mean"),
-            avg_discount_pct= (COL_DISCOUNT, "mean"),
-            total_units     = (COL_QUANTITY, "sum"),
-        )
+        .agg(**agg)
         .reset_index()
         .sort_values("total_revenue", ascending=False)
         .reset_index(drop=True)
@@ -225,9 +255,10 @@ def sales_rep_performance(df: pd.DataFrame) -> pd.DataFrame:
 
     total = result["total_revenue"].sum()
     result["revenue_share_pct"] = (result["total_revenue"] / total * 100).round(2)
-    result["avg_discount_pct"]  = (result["avg_discount_pct"] * 100).round(2)
-    result["total_revenue"]     = result["total_revenue"].round(2)
-    result["avg_order_value"]   = result["avg_order_value"].round(2)
+    if "avg_discount_pct" in result.columns:
+        result["avg_discount_pct"] = (result["avg_discount_pct"] * 100).round(2)
+    result["total_revenue"]  = result["total_revenue"].round(2)
+    result["avg_order_value"] = result["avg_order_value"].round(2)
     return result
 
 

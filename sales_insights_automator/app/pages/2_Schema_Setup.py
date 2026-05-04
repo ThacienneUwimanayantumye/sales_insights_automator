@@ -18,6 +18,7 @@ from config.schema import SchemaConfig, ALL_ROLES, REQUIRED_ROLES, ROLE_DESCRIPT
 from profiling.schema_wizard import SchemaWizard
 from cleaning.cleaner import DataCleaner
 from cleaning.config import CleaningConfig
+from cleaning.functions import normalize_column_names
 from analysis.analyzer import SalesAnalyzer
 
 st.set_page_config(page_title="Schema Setup", page_icon="🔧", layout="wide")
@@ -36,7 +37,14 @@ if not state.has(state.RAW_DF):
 
 raw_df    = state.get(state.RAW_DF)
 file_name = state.get(state.FILE_NAME, "your dataset")
-columns   = list(raw_df.columns)
+
+# Pre-normalise column names so schema detection uses the same names that
+# DataCleaner(normalize_columns=True) will produce.  This prevents the
+# mismatch where the schema stores "Total Amount" but the cleaned df has
+# "total_amount", causing rename_to_standard() to silently do nothing.
+norm_df, _col_rename_map = normalize_column_names(raw_df)
+
+columns   = list(norm_df.columns)
 none_opt  = "— not in this dataset —"
 
 st.title("🔧 Schema Setup")
@@ -50,7 +58,7 @@ st.markdown("---")
 # ── Auto-detect on first visit ────────────────────────────────────────────────
 if "wizard_mapping" not in st.session_state:
     with st.spinner("Auto-detecting column roles…"):
-        detected = SchemaWizard().detect(raw_df)
+        detected = SchemaWizard().detect(norm_df)
     st.session_state["wizard_mapping"] = detected.to_dict()
 
 mapping: dict = st.session_state["wizard_mapping"]
@@ -59,10 +67,10 @@ mapping: dict = st.session_state["wizard_mapping"]
 with st.expander("Your dataset columns", expanded=False):
     preview_rows = []
     for col in columns:
-        s = raw_df[col].dropna()
+        s = norm_df[col].dropna()
         preview_rows.append({
             "Column":  col,
-            "Type":    str(raw_df[col].dtype),
+            "Type":    str(norm_df[col].dtype),
             "Unique":  int(s.nunique()),
             "Sample":  ", ".join(str(v) for v in s.unique()[:3]),
         })
@@ -110,7 +118,7 @@ st.session_state["wizard_mapping"] = mapping
 # ── Validation feedback ───────────────────────────────────────────────────────
 st.markdown("---")
 schema_preview = SchemaConfig.from_dict(mapping)
-validation_errors = schema_preview.validate(raw_df)
+validation_errors = schema_preview.validate(norm_df)
 
 if validation_errors:
     for err in validation_errors:
@@ -141,8 +149,10 @@ if st.button("Apply Schema & Run Analysis", type="primary", disabled=apply_disab
     state.clear_downstream(state.SCHEMA)
 
     with st.spinner("Cleaning data…"):
-        # Build type_conversions: convert the mapped date column to datetime
-        date_col    = mapping.get("date")
+        # mapping already uses normalized column names (from norm_df detection).
+        # DataCleaner with normalize_columns=True produces the same names, so
+        # schema.rename_to_standard() will find every mapped column correctly.
+        date_col    = mapping.get("date")   # already normalized, e.g. "date"
         type_convs  = {date_col: "datetime"} if date_col else {}
 
         config  = CleaningConfig(
@@ -151,9 +161,8 @@ if st.button("Apply Schema & Run Analysis", type="primary", disabled=apply_disab
             type_conversions  = type_convs,
         )
         cleaner  = DataCleaner(config)
-        clean_df = cleaner.clean(raw_df)
-        # Apply schema rename so standard column names are used
-        clean_df = schema.rename_to_standard(clean_df)
+        clean_df = cleaner.clean(raw_df)    # raw_df → columns normalized
+        clean_df = schema.rename_to_standard(clean_df)   # e.g. total_amount → revenue
         state.set(state.CLEAN_DF, clean_df)
         state.set(state.CLEANING_REPORT, cleaner.report)
 

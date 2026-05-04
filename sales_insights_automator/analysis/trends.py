@@ -227,7 +227,51 @@ def monthly_revenue_by_region(
     return pivot
 
 
-# ── 7. Summary stats for the trend data ──────────────────────────────────────
+# ── 7. Quarterly revenue trend ───────────────────────────────────────────────
+
+def quarterly_revenue(
+    df: pd.DataFrame,
+    date_col: str = COL_DATE,
+) -> pd.DataFrame:
+    """Aggregate revenue by calendar quarter.
+
+    Returns
+    -------
+    pd.DataFrame
+        Columns: ``quarter`` (e.g. "2024Q1"), ``year`` (int), ``q_label``
+                 (e.g. "Q1"), ``total_revenue``, ``order_count``,
+                 ``total_units``, ``qoq_growth_pct``.
+        Sorted chronologically.
+    """
+    df = df.copy()
+    if not pd.api.types.is_datetime64_any_dtype(df[date_col]):
+        df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
+    df = df.dropna(subset=[date_col])
+    df = df.set_index(date_col)
+
+    agg: dict = {
+        "total_revenue": (COL_REVENUE,  "sum"),
+        "order_count":   (COL_ORDER_ID, "count"),
+    }
+    if COL_QUANTITY in df.columns:
+        agg["total_units"] = (COL_QUANTITY, "sum")
+
+    quarterly = df.resample("QE").agg(**agg).reset_index()
+    quarterly.rename(columns={date_col: "_qdate"}, inplace=True)
+    quarterly["quarter"] = quarterly["_qdate"].dt.to_period("Q").astype(str)
+    quarterly["year"]    = quarterly["_qdate"].dt.year
+    quarterly["q_label"] = "Q" + quarterly["_qdate"].dt.quarter.astype(str)
+    quarterly.drop(columns=["_qdate"], inplace=True)
+
+    quarterly["total_revenue"] = quarterly["total_revenue"].round(2)
+    quarterly["qoq_growth_pct"] = (
+        quarterly["total_revenue"].pct_change() * 100
+    ).round(2)
+
+    return quarterly
+
+
+# ── 8. Summary stats for the trend data ──────────────────────────────────────
 
 def trend_summary(monthly_df: pd.DataFrame) -> Dict[str, object]:
     """Compute high-level trend statistics from a monthly revenue DataFrame.
