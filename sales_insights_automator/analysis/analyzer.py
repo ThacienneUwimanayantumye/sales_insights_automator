@@ -34,6 +34,7 @@ import pandas as pd
 from analysis import metrics as m
 from analysis import trends  as t
 from analysis.insight_builder import AnalysisResult
+from config.schema import SchemaConfig
 
 
 class SalesAnalyzer:
@@ -50,6 +51,22 @@ class SalesAnalyzer:
     best_worst_n : int
         Number of best/worst months to identify.
         Defaults to 3.
+    schema : SchemaConfig, optional
+        Maps your dataset's actual column names to the standard roles the
+        analysis layer expects.  When provided, columns are transparently
+        renamed at the start of ``analyze()`` — nothing else changes.
+
+        If your dataset already uses the standard column names
+        (order_id, date, revenue, …) you don't need to provide a schema.
+
+        Obtain a schema using the interactive wizard::
+
+            from profiling.schema_wizard import SchemaWizard
+            schema = SchemaWizard().run(raw_df, save_path="config/schema.json")
+
+        Or load a previously saved one::
+
+            schema = SchemaConfig.from_json("config/schema.json")
 
     Attributes
     ----------
@@ -68,10 +85,12 @@ class SalesAnalyzer:
         top_n: int = 5,
         rolling_window: int = 3,
         best_worst_n: int = 3,
+        schema: SchemaConfig | None = None,
     ) -> None:
         self.top_n          = top_n
         self.rolling_window = rolling_window
         self.best_worst_n   = best_worst_n
+        self.schema         = schema
         self._result: AnalysisResult | None = None
 
     # ------------------------------------------------------------------ #
@@ -110,6 +129,20 @@ class SalesAnalyzer:
         """
         if df.empty:
             raise ValueError("Cannot analyze an empty DataFrame.")
+
+        # ── Apply schema mapping ──────────────────────────────────────
+        # Rename dataset-specific column names to the standard names the
+        # analysis functions expect.  The original DataFrame is unchanged.
+        if self.schema is not None:
+            errors = self.schema.validate(df)
+            if errors:
+                raise ValueError(
+                    "Schema validation failed:\n" +
+                    "\n".join(f"  - {e}" for e in errors)
+                )
+            df = self.schema.rename_to_standard(df)
+            print(f"[SalesAnalyzer] Schema mapping applied — "
+                  f"{len(self.schema.mapped_roles())} roles mapped.")
 
         print(f"[SalesAnalyzer] Starting analysis on {len(df):,} rows...")
 
@@ -194,8 +227,10 @@ class SalesAnalyzer:
         return self._result
 
     def __repr__(self) -> str:
+        schema_str = repr(self.schema) if self.schema else "default column names"
         return (
             f"SalesAnalyzer("
             f"top_n={self.top_n}, "
-            f"rolling_window={self.rolling_window})"
+            f"rolling_window={self.rolling_window}, "
+            f"schema={schema_str})"
         )

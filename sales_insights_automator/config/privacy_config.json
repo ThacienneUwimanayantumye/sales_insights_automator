@@ -1,0 +1,11 @@
+{
+  "_comment": "Privacy rules applied before any data is sent to the OpenAI API. Edit this file to tune protection levels — no Python required.",
+
+  "mask_rep_names":      true,
+  "mask_product_names":  false,
+  "mask_region_names":   false,
+  "round_revenue_to":    1000,
+  "request_no_training": true,
+  "strip_exact_dates":   false,
+  "enable_audit_log":    true
+}

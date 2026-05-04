@@ -105,6 +105,21 @@ Guidelines:
 - Do not repeat raw tables back — interpret and synthesise them
 """
 
+# Appended to the system prompt when privacy protection is enabled.
+# This documents our data-use intent and instructs the model not to
+# retain, reference, or re-use this data beyond the current request.
+PRIVACY_INSTRUCTION = """\
+
+CONFIDENTIALITY NOTICE:
+The data provided is confidential business information shared solely for \
+the purpose of generating the analysis requested below.
+- Do not store, reference, or reproduce this data beyond this response
+- Do not use this data for training, fine-tuning, or any other purpose
+- Treat all figures, labels, and identifiers as strictly confidential
+- If any value appears to identify a real individual or organisation,
+  disregard that inference and treat it as an anonymous label only
+"""
+
 
 @dataclass
 class PromptPayload:
@@ -147,6 +162,10 @@ class PromptBuilder:
         user prompt.  Longer summaries are truncated with a note.
         Defaults to 12_000 (~3,000 tokens), comfortably under GPT-4o-mini's
         128k context window.
+    request_no_training : bool
+        If True, append the CONFIDENTIALITY NOTICE to the system prompt
+        instructing the model not to retain or re-use the data.
+        Defaults to True.
 
     Examples
     --------
@@ -156,8 +175,13 @@ class PromptBuilder:
     850
     """
 
-    def __init__(self, max_context_chars: int = 12_000) -> None:
-        self.max_context_chars = max_context_chars
+    def __init__(
+        self,
+        max_context_chars:   int  = 12_000,
+        request_no_training: bool = True,
+    ) -> None:
+        self.max_context_chars   = max_context_chars
+        self.request_no_training = request_no_training
 
     def build(
         self,
@@ -192,13 +216,35 @@ class PromptBuilder:
 
         tmpl = TEMPLATES[template]
         data_context = self._build_data_context(result)
-        user_prompt  = self._build_user_prompt(data_context, tmpl["focus"])
+        return self._assemble(data_context, tmpl["focus"], template)
 
-        return PromptPayload(
-            system        = SYSTEM_PROMPT,
-            user          = user_prompt,
-            template_name = template,
-        )
+    def build_from_summary(
+        self,
+        summary_text: str,
+        template: str = "full_report",
+    ) -> PromptPayload:
+        """Build a PromptPayload from a pre-built summary string.
+
+        Used by InsightGenerator when the summary has already been
+        anonymised by DataAnonymizer before being passed here.
+
+        Parameters
+        ----------
+        summary_text : str
+            Anonymised text summary (output of DataAnonymizer).
+        template : str
+            Prompt template to use.
+        """
+        if template not in TEMPLATES:
+            raise ValueError(
+                f"Unknown template '{template}'. Valid: {list(TEMPLATES.keys())}"
+            )
+        if len(summary_text) > self.max_context_chars:
+            summary_text = (
+                summary_text[: self.max_context_chars]
+                + "\n\n[... data truncated to fit context window ...]"
+            )
+        return self._assemble(summary_text, TEMPLATES[template]["focus"], template)
 
     @staticmethod
     def available_templates() -> Dict[str, str]:
@@ -212,21 +258,28 @@ class PromptBuilder:
     def _build_data_context(self, result: AnalysisResult) -> str:
         """Extract the data context string from the result, truncating if needed."""
         context = result.text_summary()
-
         if len(context) > self.max_context_chars:
             context = (
                 context[: self.max_context_chars]
                 + "\n\n[... data truncated to fit context window ...]"
             )
-
         return context
 
-    @staticmethod
-    def _build_user_prompt(data_context: str, focus_instruction: str) -> str:
-        """Assemble the final user message from data + focus instruction."""
-        return (
+    def _assemble(
+        self,
+        data_context:      str,
+        focus_instruction: str,
+        template_name:     str,
+    ) -> PromptPayload:
+        """Assemble system + user prompts and return a PromptPayload."""
+        system = SYSTEM_PROMPT
+        if self.request_no_training:
+            system = system + PRIVACY_INSTRUCTION
+
+        user = (
             f"Below is the sales analysis data for the period under review.\n\n"
             f"{data_context}\n\n"
             f"---\n\n"
             f"Your task:\n{focus_instruction}"
         )
+        return PromptPayload(system=system, user=user, template_name=template_name)

@@ -13,14 +13,15 @@ insights using the OpenAI API.
 ## Architecture Overview
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        Pipeline Stages                          │
-│                                                                 │
-│  1. Ingestion   →  2. Cleaning  →  3. Analysis  →  4. AI       │
-│  (this stage)                                        Insights   │
-│                                                                 │
-│  Output:  CLI (MVP)  │  Streamlit UI (later)                    │
-└─────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│                          Pipeline Stages                             │
+│                                                                      │
+│  1. Ingestion → 1b. Profiling → 2. Cleaning → 3. Analysis → 4. AI  │
+│                 (data quality         ↑ informed by profile           │
+│                  report)                                             │
+│                                                                      │
+│  Output:  CLI (MVP)  │  Streamlit UI (later)                         │
+└──────────────────────────────────────────────────────────────────────┘
 ```
 
 Each stage is a self-contained Python module.  No stage knows about the
@@ -42,6 +43,9 @@ sales_insights_automator/
 │   ├── sqlite_source.py     # SQLiteSource
 │   ├── kaggle_source.py     # KaggleSource
 │   └── google_drive_source.py  # GoogleDriveSource (stub)
+│
+├── profiling/               # Stage 1b — data quality report before cleaning
+│   └── profiler.py          # DataProfiler → DataProfile (+ ColumnProfile)
 │
 ├── data/
 │   ├── samples/             # Generated sample data (CSV + SQLite)
@@ -94,6 +98,121 @@ python scripts/demo_ingestion.py
 
 ```bash
 pytest tests/ -v
+```
+
+---
+
+## Schema Wizard — Bring Your Own Dataset
+
+Every company names columns differently.  One dataset calls it `"revenue"`,
+another `"total_sales"`, a third `"amt"`.  The Schema Wizard solves this
+**without requiring any manual JSON editing**.
+
+### How it works
+
+```
+1. Load your file         → detect columns automatically
+2. Auto-detect roles      → score every column against 10 semantic roles
+3. Show you the mapping   → one column at a time, with samples
+4. You confirm or correct → just press Enter for obvious matches
+5. Save the result        → reusable JSON file for all future runs
+```
+
+### Run the wizard
+
+```bash
+# Interactive (recommended for any new dataset):
+python scripts/setup_schema.py --data path/to/your_file.csv
+
+# Auto-detect only, no prompts (for automated pipelines):
+python scripts/setup_schema.py --data path/to/your_file.csv --auto
+
+# SQLite source:
+python scripts/setup_schema.py --data sales.db --table transactions
+```
+
+### What you see
+
+```
+  #   Column                        Type          Nulls   Unique  Sample values
+  ─── ──────────────────────────── ────────────  ─────── ─────── ─────────────
+    1  transaction_id               str                ✓     500  TXN-0001, ...
+    2  sale_date                    str                ✓     265  2024-01-01, ...
+    3  total_sales                  float64            ✓     428  950.0, 900.0, ...
+    ...
+
+  Role  1/10: order_id  [REQUIRED]
+  Unique identifier per transaction
+  Suggested: 'transaction_id'  (str)  samples: TXN-0001, TXN-0002
+
+  [Enter]=accept  [s]=skip  [?]=show all columns  [1–11]=pick manually
+  >                             ← just press Enter
+```
+
+### Use the saved schema in analysis
+
+```python
+from config.schema import SchemaConfig
+from analysis.analyzer import SalesAnalyzer
+
+schema   = SchemaConfig.from_json("config/your_file_schema.json")
+analyzer = SalesAnalyzer(schema=schema)
+result   = analyzer.analyze(your_df)
+```
+
+### Supported semantic roles
+
+| Role | Required | Meaning |
+|---|---|---|
+| `order_id` | ✅ | Unique transaction identifier |
+| `date` | ✅ | Transaction date |
+| `revenue` | ✅ | Monetary value per transaction |
+| `product` | optional | Product name or SKU |
+| `category` | optional | Product group or department |
+| `region` | optional | Sales territory or area |
+| `sales_rep` | optional | Salesperson name or ID |
+| `quantity` | optional | Units sold per transaction |
+| `unit_price` | optional | Price per unit |
+| `discount` | optional | Discount applied (0–1 fraction) |
+
+Missing optional roles are gracefully skipped in analysis.
+
+---
+
+## Profiling Layer — Data Quality Report
+
+Run `DataProfiler` immediately after loading raw data and **before** cleaning.
+It answers the questions every data analyst asks on first contact with a dataset.
+
+```python
+from ingestion.csv_source import CSVSource
+from profiling.profiler import DataProfiler
+
+raw_df  = CSVSource("data/samples/sample_sales.csv").load()
+profile = DataProfiler().profile(raw_df)
+profile.print_report()          # rich terminal output
+profile.to_json("profile.json") # save for later
+```
+
+### What the report covers
+
+| Section | Detail |
+|---|---|
+| **Overview** | Row/column count, memory usage, column kinds, data quality score (0–100) |
+| **Duplicates** | Exact duplicate row count and percentage |
+| **Missing values** | Per-column null count and %, total null density, severity classification |
+| **Column types** | pandas dtype + inferred kind (numeric / categorical / datetime / boolean) |
+| **Cardinality** | Unique-value % — flags likely ID columns (≥95%) and constant columns |
+| **Numeric stats** | Min, max, mean, median, std, Q1/Q3/IQR, skewness, zero count |
+| **Outlier detection** | Tukey IQR fence — count and % of rows outside [Q1−1.5×IQR, Q3+1.5×IQR] |
+| **Categorical stats** | Top-5 value counts with mini bar charts |
+| **Quality flags** | Constant columns, high-null columns (>20%), outlier columns, likely IDs |
+| **Recommendations** | Prioritised, actionable cleaning steps derived automatically from the flags |
+
+### Quick-start
+
+```bash
+python scripts/demo_profiler.py   # runs on clean + deliberately dirty data
 ```
 
 ---
@@ -198,6 +317,42 @@ python scripts/demo_ai.py --template recs --save  # save report to data/raw/
 - `.print_cli()` — formatted terminal output
 - `.to_markdown()` — Markdown document (ready for Streamlit)
 - `.to_json(path)` — JSON for storage / audit trail
+
+---
+
+## Privacy Layer
+
+The privacy layer sits between the analysis layer and the AI layer. It ensures **no sensitive data ever leaves the machine unprotected**.
+
+| Module | Purpose |
+|---|---|
+| `privacy/config.py` | `PrivacyConfig` — declarative rules, loadable from `config/privacy_config.json` |
+| `privacy/anonymizer.py` | `DataAnonymizer` — masks names, rounds revenues, strips dates before AI prompt |
+| `privacy/audit_log.py` | `AuditLogger` — JSONL audit trail of every API call (metadata only, never content) |
+
+### What happens before each API call
+
+```
+AnalysisResult (real data, stays local)
+       ↓  DataAnonymizer
+Safe copy (rep names → "Sales Rep A", revenues rounded to nearest $1,000)
+       ↓  PromptBuilder (adds CONFIDENTIALITY NOTICE to system prompt)
+OpenAI API  ← only ever sees anonymised data
+       ↓  AuditLogger
+data/audit/api_calls.jsonl  (metadata only — never prompt content)
+```
+
+### Default settings (`config/privacy_config.json`)
+
+| Rule | Default | Effect |
+|---|---|---|
+| `mask_rep_names` | `true` | "Alice Martin" → "Sales Rep A" |
+| `mask_product_names` | `false` | Product names sent as-is |
+| `mask_region_names` | `false` | Region names sent as-is |
+| `round_revenue_to` | `1000` | $956,745 → $957,000 |
+| `request_no_training` | `true` | Adds confidentiality notice to system prompt |
+| `strip_exact_dates` | `false` | Exact period is included |
+| `enable_audit_log` | `true` | Every call logged to `data/audit/api_calls.jsonl` |
 
 ---
 

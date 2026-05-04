@@ -1,5 +1,7 @@
 # Environment & secrets
 .env
+.env.*           # catches .env.example.env and any other misnamed env files
+!.env.example    # but keep the example template
 
 # Python
 __pycache__/
@@ -21,7 +23,11 @@ htmlcov/
 
 # Generated / downloaded data (not source code)
 data/raw/
+data/audit/
 *.db
+
+# Generated schema files (created by setup_schema.py at runtime)
+sales_insights_automator/config/*_schema.json
 
 # macOS
 .DS_Store

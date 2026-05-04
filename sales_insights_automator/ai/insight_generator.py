@@ -34,6 +34,9 @@ from typing import Optional
 from ai.llm_client import LLMClient, LLMClientError
 from ai.prompt_builder import PromptBuilder, PromptPayload
 from analysis.insight_builder import AnalysisResult
+from privacy.config import PrivacyConfig
+from privacy.anonymizer import DataAnonymizer
+from privacy.audit_log import AuditLogger
 
 
 # ── InsightReport ─────────────────────────────────────────────────────────────
@@ -206,13 +209,23 @@ class InsightGenerator:
 
     def __init__(
         self,
-        client:  Optional[LLMClient]  = None,
-        builder: Optional[PromptBuilder] = None,
-        dry_run: bool = False,
+        client:         Optional[LLMClient]     = None,
+        builder:        Optional[PromptBuilder] = None,
+        privacy_config: Optional[PrivacyConfig] = None,
+        dry_run:        bool = False,
     ) -> None:
-        self.client  = client  or LLMClient()
-        self.builder = builder or PromptBuilder()
-        self.dry_run = dry_run
+        self.dry_run        = dry_run
+
+        # Default to strong privacy protection
+        self.privacy_config = privacy_config or PrivacyConfig()
+        self.anonymizer     = DataAnonymizer(self.privacy_config)
+        self.audit_logger   = AuditLogger()
+
+        # Wire no-training flag into the prompt builder
+        self.builder = builder or PromptBuilder(
+            request_no_training=self.privacy_config.request_no_training
+        )
+        self.client  = client or LLMClient()
 
     # ------------------------------------------------------------------ #
     # Public API                                                          #
@@ -244,18 +257,22 @@ class InsightGenerator:
         ValueError
             If ``template`` is not a recognised template name.
         """
-        print(
-            f"[InsightGenerator] Building prompt "
-            f"(template='{template}')..."
-        )
-        payload = self.builder.build(result, template=template)
-        print(
-            f"[InsightGenerator] Prompt ready — "
-            f"~{payload.estimated_tokens:,} estimated tokens"
-        )
+        # ── Step 1: Anonymise before building the prompt ──────────────
+        print(f"[InsightGenerator] Applying privacy rules: {self.privacy_config.summary()}")
+        safe_result   = self.anonymizer.anonymize(result)
+        safe_summary  = safe_result.text_summary()
+        # Catch any remaining real values that slipped through other fields
+        safe_summary  = self.anonymizer.anonymize_text(safe_summary)
+
+        # ── Step 2: Build prompt from anonymised summary ──────────────
+        print(f"[InsightGenerator] Building prompt (template='{template}')...")
+        payload = self.builder.build_from_summary(safe_summary, template=template)
+        print(f"[InsightGenerator] Prompt ready — ~{payload.estimated_tokens:,} estimated tokens")
 
         if self.dry_run:
-            return self._dry_run_report(payload, result, template)
+            report = self._dry_run_report(payload, result, template)
+            self._audit(report, template, result, is_dry_run=True)
+            return report
 
         if not self.client.validate():
             raise LLMClientError(
@@ -263,10 +280,7 @@ class InsightGenerator:
                 "Set OPENAI_API_KEY in your .env file, or use dry_run=True."
             )
 
-        print(
-            f"[InsightGenerator] Calling OpenAI API "
-            f"(model={self.client.model!r})..."
-        )
+        print(f"[InsightGenerator] Calling OpenAI API (model={self.client.model!r})...")
         llm_response = self.client.complete(
             system_prompt = payload.system,
             user_prompt   = payload.user,
@@ -277,14 +291,10 @@ class InsightGenerator:
             f"{llm_response.total_tokens:,} tokens used, "
             f"{llm_response.latency_ms:.0f}ms"
         )
-
         if llm_response.was_truncated:
-            print(
-                "[InsightGenerator] ⚠  Response was truncated. "
-                "Consider increasing max_tokens in config/settings.py."
-            )
+            print("[InsightGenerator] ⚠  Response truncated — consider increasing max_tokens.")
 
-        return InsightReport(
+        report = InsightReport(
             insights_text     = llm_response.content,
             template_used     = template,
             model             = llm_response.model,
@@ -296,6 +306,35 @@ class InsightGenerator:
             row_count         = result.row_count,
             was_truncated     = llm_response.was_truncated,
             is_dry_run        = False,
+        )
+        self._audit(report, template, result, is_dry_run=False)
+        return report
+
+    # ------------------------------------------------------------------ #
+    # Audit helper                                                        #
+    # ------------------------------------------------------------------ #
+
+    def _audit(
+        self,
+        report:     "InsightReport",
+        template:   str,
+        result:     AnalysisResult,
+        is_dry_run: bool,
+    ) -> None:
+        """Write a metadata-only entry to the audit log."""
+        if not self.privacy_config.enable_audit_log:
+            return
+        self.audit_logger.log_api_call(
+            template          = template,
+            model             = report.model,
+            prompt_tokens     = report.prompt_tokens,
+            completion_tokens = report.completion_tokens,
+            row_count         = result.row_count,
+            date_range        = result.date_range,
+            masked_fields     = self.anonymizer.masked_fields,
+            latency_ms        = report.latency_ms,
+            privacy_summary   = self.privacy_config.summary(),
+            was_dry_run       = is_dry_run,
         )
 
     # ------------------------------------------------------------------ #
