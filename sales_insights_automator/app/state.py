@@ -24,6 +24,8 @@ CLEANING_REPORT = "cleaning_report"  # CleaningReport
 ANALYSIS_RESULT = "analysis_result"  # AnalysisResult
 INSIGHT_REPORT  = "insight_report"   # InsightReport
 FILE_NAME       = "file_name"        # str — display name of uploaded file
+EXTRA_DIMS      = "extra_dims"       # list[str] — discovered dimension columns
+EXTRA_METRICS   = "extra_metrics"    # list[str] — discovered metric columns
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -48,9 +50,11 @@ def clear_downstream(from_key: str) -> None:
     """
     cascade = {
         RAW_DF:          [PROFILE, SCHEMA, CLEAN_DF, CLEANING_REPORT,
-                          ANALYSIS_RESULT, INSIGHT_REPORT, "wizard_mapping"],
+                          ANALYSIS_RESULT, INSIGHT_REPORT, "wizard_mapping",
+                          EXTRA_DIMS, EXTRA_METRICS],
         SCHEMA:          [CLEAN_DF, CLEANING_REPORT,
-                          ANALYSIS_RESULT, INSIGHT_REPORT],
+                          ANALYSIS_RESULT, INSIGHT_REPORT,
+                          EXTRA_DIMS, EXTRA_METRICS],
         ANALYSIS_RESULT: [INSIGHT_REPORT],
     }
     for key in cascade.get(from_key, []):

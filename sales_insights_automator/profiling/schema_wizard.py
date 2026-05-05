@@ -76,11 +76,30 @@ _NAME_PATTERNS: Dict[str, List[str]] = {
                    "price_per_unit", "selling_price", "list_price"],
     "discount":   ["discount", "disc", "reduction", "markdown",
                    "discount_pct", "discount_rate"],
-    "customer_id":["customer_id", "customer", "client_id", "client",
-                   "buyer_id", "cust_id", "member_id", "user_id"],
-    "gender":     ["gender", "sex", "male_female", "m_f", "customer_gender"],
-    "age":        ["age", "age_years", "customer_age", "buyer_age",
-                   "age_at_purchase"],
+    "customer_id":    ["customer_id", "customer", "client_id", "client",
+                       "buyer_id", "cust_id", "member_id", "user_id"],
+    "gender":         ["gender", "sex", "male_female", "m_f", "customer_gender"],
+    "age":            ["age", "age_years", "customer_age", "buyer_age",
+                       "age_at_purchase"],
+    "profit":         ["profit", "net_profit", "gross_profit", "margin",
+                       "profit_amount", "net_income", "earnings"],
+    "cost":           ["cost", "cogs", "cost_of_goods", "unit_cost",
+                       "total_cost", "purchase_cost", "expense"],
+    "channel":        ["channel", "sales_channel", "platform", "store_type",
+                       "source", "medium", "origin", "fulfillment_channel",
+                       "order_channel"],
+    "payment_method": ["payment", "payment_method", "payment_type",
+                       "pay_method", "tender", "transaction_type",
+                       "payment_mode"],
+    "customer_segment":["segment", "customer_segment", "tier", "loyalty",
+                        "membership", "customer_type", "customer_tier",
+                        "loyalty_tier", "membership_level"],
+    "return_flag":    ["return", "returned", "return_flag", "is_return",
+                       "refund", "refunded", "return_status",
+                       "is_returned", "return_indicator"],
+    "rating":         ["rating", "score", "review", "review_score",
+                       "star", "stars", "feedback", "satisfaction",
+                       "nps", "csat"],
 }
 
 _DTYPE_KINDS: Dict[str, List[str]] = {
@@ -93,10 +112,17 @@ _DTYPE_KINDS: Dict[str, List[str]] = {
     "sales_rep":  ["categorical"],
     "quantity":   ["numeric"],
     "unit_price": ["numeric"],
-    "discount":    ["numeric"],
-    "customer_id": ["categorical"],
-    "gender":      ["categorical"],
-    "age":         ["numeric"],
+    "discount":         ["numeric"],
+    "customer_id":      ["categorical"],
+    "gender":           ["categorical"],
+    "age":              ["numeric"],
+    "profit":           ["numeric"],
+    "cost":             ["numeric"],
+    "channel":          ["categorical"],
+    "payment_method":   ["categorical"],
+    "customer_segment": ["categorical"],
+    "return_flag":      ["categorical", "numeric"],
+    "rating":           ["numeric"],
 }
 
 # Expected cardinality range as fraction of total rows (min, max)
@@ -110,10 +136,17 @@ _CARDINALITY_RANGE: Dict[str, Tuple[float, float]] = {
     "sales_rep":  (0.001, 0.15),  # small team
     "quantity":   (0.001, 0.30),  # small range of integers
     "unit_price": (0.001, 0.30),  # limited price points
-    "discount":    (0.001, 0.20),  # limited discount tiers
-    "customer_id": (0.01,  0.95),  # many customers, may repeat across transactions
-    "gender":      (0.001, 0.02),  # very few distinct values (e.g. Male/Female)
-    "age":         (0.02,  0.80),  # moderate range of integer ages
+    "discount":         (0.001, 0.20),  # limited discount tiers
+    "customer_id":      (0.01,  0.95),  # many customers, may repeat
+    "gender":           (0.001, 0.02),  # very few distinct values
+    "age":              (0.02,  0.80),  # moderate range of integer ages
+    "profit":           (0.10,  1.00),  # continuous monetary
+    "cost":             (0.10,  1.00),  # continuous monetary
+    "channel":          (0.001, 0.05),  # small set (Online / In-Store / …)
+    "payment_method":   (0.001, 0.05),  # small set (Card / Cash / …)
+    "customer_segment": (0.001, 0.05),  # small set (Gold / Silver / …)
+    "return_flag":      (0.001, 0.01),  # usually 2 values (0/1, Yes/No)
+    "rating":           (0.001, 0.01),  # typically 5 distinct star values
 }
 
 
@@ -316,6 +349,86 @@ class SchemaWizard:
                     break
 
         return mapping
+
+    # ------------------------------------------------------------------ #
+    # Extra-column discovery (Layer 2)                                    #
+    # ------------------------------------------------------------------ #
+
+    def discover_extras(
+        self,
+        df: pd.DataFrame,
+        schema: "SchemaConfig",
+    ) -> Dict[str, List[str]]:
+        """Find columns not captured by the schema and classify them.
+
+        After ``schema.rename_to_standard(df)`` the DataFrame's columns are
+        a mix of standard role names (``"revenue"``, ``"category"`` …) and
+        leftover columns that were never matched to any role.  This method
+        scans the leftovers and returns two lists:
+
+        ``"dimensions"``
+            Categorical columns with 2–50 unique values and cardinality ≤ 15 %.
+            Good for slicing / grouping (e.g. ``channel``, ``payment_method``).
+
+        ``"metrics"``
+            Numeric columns (excluding tiny-range ones that look like flags).
+            Good for aggregation (e.g. ``profit``, ``cost``, ``rating``).
+
+        Columns with ≤ 1 unique value (no information) or > 50 % cardinality
+        while categorical (likely free-text or IDs) are silently dropped.
+
+        Parameters
+        ----------
+        df : pd.DataFrame
+            The **renamed** clean DataFrame (output of
+            ``schema.rename_to_standard(clean_df)``).
+        schema : SchemaConfig
+            The applied schema, used to identify which columns are already
+            accounted for by standard roles.
+
+        Returns
+        -------
+        dict with keys ``"dimensions"`` and ``"metrics"``, each a list of
+        column name strings.
+        """
+        # Standard names already captured by the schema
+        used = {
+            STANDARD_NAMES[role]
+            for role in ALL_ROLES
+            if getattr(schema, role) is not None
+        }
+
+        dimensions: List[str] = []
+        metrics:    List[str] = []
+
+        n_rows = len(df)
+
+        for col in df.columns:
+            if col in used:
+                continue
+
+            series   = df[col].dropna()
+            n_unique = int(series.nunique())
+
+            if n_unique <= 1:
+                continue   # no variation — useless
+
+            is_numeric = pd.api.types.is_numeric_dtype(df[col])
+            cardinality = n_unique / n_rows if n_rows > 0 else 1.0
+
+            if is_numeric:
+                # Tiny-range numerics (e.g. 0/1 return flag) → dimension
+                if n_unique <= 5:
+                    dimensions.append(col)
+                else:
+                    metrics.append(col)
+            else:
+                # Categorical: require low cardinality and manageable unique count
+                if 2 <= n_unique <= 50 and cardinality <= 0.15:
+                    dimensions.append(col)
+                # High-cardinality text (product descriptions, free notes) → skip
+
+        return {"dimensions": dimensions, "metrics": metrics}
 
     # ------------------------------------------------------------------ #
     # Column info helper                                                  #

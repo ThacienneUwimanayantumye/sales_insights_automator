@@ -39,6 +39,10 @@ from app.components.charts import (
     revenue_quarterly,
     category_by_group,
     category_group_heatmap,
+    # extra-column discovery
+    metric_by_dimension,
+    metric_distribution,
+    _label,
 )
 from analysis import metrics as m
 from analysis import trends as t
@@ -52,8 +56,10 @@ if not state.has(state.ANALYSIS_RESULT):
         st.switch_page("pages/2_Schema_Setup.py")
     st.stop()
 
-result   = state.get(state.ANALYSIS_RESULT)
-clean_df = state.get(state.CLEAN_DF)
+result        = state.get(state.ANALYSIS_RESULT)
+clean_df      = state.get(state.CLEAN_DF)
+extra_dims    = state.get(state.EXTRA_DIMS,    []) or []
+extra_metrics = state.get(state.EXTRA_METRICS, []) or []
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 st.sidebar.title("📊 Sales Insights")
@@ -61,7 +67,7 @@ st.sidebar.markdown("---")
 st.sidebar.markdown("**Step 3 of 4** — Explore your data interactively.")
 st.sidebar.markdown("### Filters")
 
-# Date range filter
+# ── Date range filter ─────────────────────────────────────────────────────────
 has_dates = (
     clean_df is not None
     and "date" in clean_df.columns
@@ -73,12 +79,11 @@ if has_dates:
     d_max = clean_df["date"].max().date()
     date_range = st.sidebar.date_input(
         "Date range",
-        value   = (d_min, d_max),
+        value     = (d_min, d_max),
         min_value = d_min,
         max_value = d_max,
-        key     = "dash_date_range",
+        key       = "dash_date_range",
     )
-    # date_input returns a tuple when range mode; protect against single click
     if isinstance(date_range, (list, tuple)) and len(date_range) == 2:
         sel_from, sel_to = date_range
     else:
@@ -86,26 +91,57 @@ if has_dates:
 else:
     sel_from = sel_to = None
 
-# Category filter
-has_category = clean_df is not None and "category" in clean_df.columns
-if has_category:
-    all_cats = sorted(clean_df["category"].dropna().unique().tolist())
-    sel_cats = st.sidebar.multiselect(
-        "Product categories",
-        options = all_cats,
-        default = all_cats,
-        key     = "dash_categories",
+# ── Dynamic dimension filters (fully data-driven, zero hardcoding) ────────────
+# Discover every column that is useful as a filter:
+#   • categorical dtype  AND  2–100 unique values  (not free-text or IDs)
+#   • tiny-range numerics (≤ 10 unique values, e.g. 0/1 flags, 1–5 ratings)
+# Date and high-cardinality ID columns are explicitly excluded.
+_FILTER_EXCLUDE = {"date", "order_id", "customer_id", "age"}
+
+def _filterable_cols(df: pd.DataFrame) -> list:
+    if df is None:
+        return []
+    cols = []
+    for col in df.columns:
+        if col in _FILTER_EXCLUDE:
+            continue
+        if pd.api.types.is_datetime64_any_dtype(df[col]):
+            continue
+        n_unique = int(df[col].nunique())
+        if pd.api.types.is_numeric_dtype(df[col]):
+            if 2 <= n_unique <= 10:        # binary flags, star ratings …
+                cols.append(col)
+        else:
+            if 2 <= n_unique <= 100:       # categorical with manageable cardinality
+                cols.append(col)
+    return cols
+
+dim_filter_cols = _filterable_cols(clean_df)
+
+# One multiselect per filterable column — no hardcoded column names anywhere
+col_filters: dict = {}
+for _col in dim_filter_cols:
+    _all_vals = sorted(clean_df[_col].dropna().astype(str).unique().tolist())
+    _sel = st.sidebar.multiselect(
+        _label(_col),
+        options = _all_vals,
+        default = _all_vals,
+        key     = f"filter_{_col}",
     )
-    if not sel_cats:
-        sel_cats = all_cats   # guard: never empty
-else:
-    sel_cats = []
+    col_filters[_col] = _sel if _sel else _all_vals  # never empty
 
 st.sidebar.markdown("---")
-st.sidebar.caption(
-    "Filters apply to all KPIs and charts on this page. "
-    "Re-run **Schema Setup** to change column mappings."
+_active = sum(
+    1 for col, sel in col_filters.items()
+    if sel != sorted(clean_df[col].dropna().astype(str).unique().tolist())
 )
+st.sidebar.caption(
+    (f"**{_active} filter(s) active.** " if _active else "No filters active. ")
+    + "Filters apply to all KPIs and charts on this page."
+)
+
+# Shortcut used throughout the page to check category presence (data-driven)
+has_category = clean_df is not None and "category" in clean_df.columns
 
 # ── Apply filters to clean_df ─────────────────────────────────────────────────
 def apply_filters(df: pd.DataFrame) -> pd.DataFrame:
@@ -117,8 +153,9 @@ def apply_filters(df: pd.DataFrame) -> pd.DataFrame:
             (out["date"].dt.date >= sel_from) &
             (out["date"].dt.date <= sel_to)
         ]
-    if has_category and sel_cats:
-        out = out[out["category"].isin(sel_cats)]
+    for _col, _sel_vals in col_filters.items():
+        if _col in out.columns:
+            out = out[out[_col].astype(str).isin(_sel_vals)]
     return out
 
 fdf = apply_filters(clean_df)   # filtered DataFrame for live re-computation
@@ -155,7 +192,7 @@ if has_dates and sel_from != sel_to:
     st.caption(
         f"Showing: **{sel_from}** → **{sel_to}** · "
         f"{len(fdf):,} transactions"
-        + (f" · categories: {', '.join(sel_cats)}" if has_category and sel_cats != all_cats else "")
+        + (f" · {_active} filter(s) active" if _active else "")
     )
 else:
     dr = result.date_range
@@ -306,6 +343,15 @@ if "category"  in fdf.columns: dims["Product Category"] = ("category",  dim_data
 if "region"    in fdf.columns: dims["Region"]            = ("region",    dim_data(fdf, "region"))
 if "product"   in fdf.columns: dims["Product"]           = ("product",   dim_data(fdf, "product"))
 if "sales_rep" in fdf.columns: dims["Sales Rep"]         = ("sales_rep", dim_data(fdf, "sales_rep"))
+# New Layer 1 roles
+if "channel"          in fdf.columns: dims[_label("channel")]          = ("channel",          dim_data(fdf, "channel"))
+if "payment_method"   in fdf.columns: dims[_label("payment_method")]   = ("payment_method",   dim_data(fdf, "payment_method"))
+if "customer_segment" in fdf.columns: dims[_label("customer_segment")] = ("customer_segment", dim_data(fdf, "customer_segment"))
+if "return_flag"      in fdf.columns: dims[_label("return_flag")]      = ("return_flag",      dim_data(fdf, "return_flag"))
+# Extra auto-discovered dimensions (Layer 2)
+for _edim in extra_dims:
+    if _edim in fdf.columns and _label(_edim) not in dims:
+        dims[_label(_edim)] = (_edim, dim_data(fdf, _edim))
 
 if dims:
     dim_tabs = st.tabs(list(dims.keys()))
@@ -341,12 +387,17 @@ if dims:
             with st.expander(f"Full {label} table"):
                 st.dataframe(data, width="stretch", hide_index=True)
 
-    # Sales rep — special dual-axis chart when available
-    if "Sales Rep" in dims:
-        _, (_, rep_data) = dims["Sales Rep"]
-        if rep_data is not None and not rep_data.empty:
-            st.markdown("#### Sales Rep Performance (revenue + avg order value)")
-            st.plotly_chart(sales_rep_performance(rep_data), width="stretch")
+    # Sales rep — special dual-axis chart needs avg_order_value, so compute
+    # it fresh from the filtered df using the dedicated metrics function
+    # (the generic dim_data result doesn't include avg_order_value)
+    if "sales_rep" in fdf.columns:
+        try:
+            rep_perf = m.sales_rep_performance(fdf)
+            if rep_perf is not None and not rep_perf.empty:
+                st.markdown("#### Sales Rep Performance (revenue + avg order value)")
+                st.plotly_chart(sales_rep_performance(rep_perf), width="stretch")
+        except Exception:
+            pass
 
     # Category × Region heatmap when both are present
     if "Product Category" in dims and "Region" in dims:
@@ -580,7 +631,85 @@ if has_cat_col and (has_gender or has_age):
 
 st.markdown("---")
 
-# ── Section 7: Export ────────────────────────────────────────────────────────
+# ── Section 7: Additional Metrics (auto-discovered) ──────────────────────────
+# Show a section only when the dataset contains extra numeric columns beyond
+# what the fixed schema roles cover (e.g. profit, cost, rating).
+
+# Which new Layer-1 metric roles are present in the filtered df?
+_l1_metric_roles = ["profit", "cost", "rating"]
+_l1_metrics_present = [r for r in _l1_metric_roles if r in fdf.columns] if fdf is not None else []
+all_extra_metric_cols = _l1_metrics_present + [
+    m for m in extra_metrics if m not in _l1_metrics_present
+]
+
+if all_extra_metric_cols and fdf is not None and not fdf.empty:
+    st.subheader("Additional Metrics")
+    st.caption(
+        "Numeric columns in your dataset beyond the core revenue figure. "
+        "Toggle between **Summary** (KPI cards + breakdown by category) "
+        "and **Distribution** (histogram) for each metric."
+    )
+
+    for mcol in all_extra_metric_cols:
+        if mcol not in fdf.columns:
+            continue
+        series  = pd.to_numeric(fdf[mcol], errors="coerce").dropna()
+        if series.empty:
+            continue
+
+        col_label = _label(mcol)
+        is_monetary = "($)" in col_label
+        fmt = "${:,.2f}" if is_monetary else "{:,.2f}"
+
+        with st.expander(f"**{col_label}**", expanded=True):
+            # KPI row
+            k1, k2, k3, k4 = st.columns(4)
+            k1.metric("Total",   fmt.format(series.sum()))
+            k2.metric("Average", fmt.format(series.mean()))
+            k3.metric("Minimum", fmt.format(series.min()))
+            k4.metric("Maximum", fmt.format(series.max()))
+
+            # Charts side by side
+            view = st.radio(
+                "View",
+                ["By Product Category", "By another dimension", "Distribution"],
+                horizontal = True,
+                key        = f"extra_metric_view_{mcol}",
+            )
+
+            if view == "By Product Category" and "category" in fdf.columns:
+                agg_fn = "mean" if mcol == "rating" else "sum"
+                st.plotly_chart(
+                    metric_by_dimension(fdf, mcol, "category", agg=agg_fn),
+                    width="stretch",
+                )
+            elif view == "By another dimension":
+                available_dims = (
+                    [c for c in ["category", "region", "channel",
+                                  "payment_method", "customer_segment",
+                                  "gender", "sales_rep"] if c in fdf.columns]
+                    + [d for d in extra_dims if d in fdf.columns]
+                )
+                if available_dims:
+                    chosen_dim = st.selectbox(
+                        "Group by",
+                        available_dims,
+                        format_func=_label,
+                        key=f"extra_metric_dim_{mcol}",
+                    )
+                    agg_fn = "mean" if mcol == "rating" else "sum"
+                    st.plotly_chart(
+                        metric_by_dimension(fdf, mcol, chosen_dim, agg=agg_fn),
+                        width="stretch",
+                    )
+                else:
+                    st.info("No dimension columns available for breakdown.")
+            else:
+                st.plotly_chart(metric_distribution(fdf, mcol), width="stretch")
+
+st.markdown("---")
+
+# ── Section 8: Export ─────────────────────────────────────────────────────────
 st.subheader("Export")
 col_dl1, col_dl2 = st.columns(2)
 with col_dl1:

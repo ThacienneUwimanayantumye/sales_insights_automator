@@ -27,17 +27,33 @@ PALETTE = [PRIMARY, SECONDARY, ACCENT, "#8B5CF6", "#EC4899",
 # but it must always appear as "Product Category" in charts so it is never
 # confused with demographic groupings such as gender or age group.
 _LABEL: dict = {
-    "category":   "Product Category",
-    "gender":     "Gender",
-    "age_group":  "Age Group",
-    "sales_rep":  "Sales Representative",
-    "region":     "Region",
-    "product":    "Product",
-    "revenue":    "Revenue ($)",
-    "quantity":   "Units Sold",
-    "unit_price": "Price per Unit ($)",
-    "order_id":   "Order ID",
-    "date":       "Date",
+    # required roles
+    "order_id":         "Order ID",
+    "date":             "Date",
+    "revenue":          "Revenue ($)",
+    # sales dimensions
+    "category":         "Product Category",
+    "region":           "Region",
+    "product":          "Product",
+    "sales_rep":        "Sales Representative",
+    "quantity":         "Units Sold",
+    "unit_price":       "Price per Unit ($)",
+    "discount_pct":     "Discount (%)",
+    # customer demographics
+    "customer_id":      "Customer ID",
+    "gender":           "Gender",
+    "age":              "Age",
+    "age_group":        "Age Group",
+    # financial enrichment
+    "profit":           "Profit ($)",
+    "cost":             "Cost ($)",
+    # transaction attributes
+    "channel":          "Sales Channel",
+    "payment_method":   "Payment Method",
+    # customer attributes
+    "customer_segment": "Customer Segment",
+    "return_flag":      "Returned",
+    "rating":           "Rating",
 }
 
 def _label(col: str) -> str:
@@ -713,3 +729,107 @@ def scatter_qty_revenue(
         legend_title     = _label(category_col) if has_category else "",
     )
     return _base_layout(fig, "Quantity vs Revenue per Transaction")
+
+
+def metric_by_dimension(
+    df: pd.DataFrame,
+    metric_col: str,
+    dim_col: str,
+    agg: str = "sum",
+    top_n: int = 20,
+) -> go.Figure:
+    """Horizontal bar chart for any numeric metric broken down by any dimension.
+
+    Used by the dashboard's Additional Metrics section and the extra-dimension
+    tabs in Revenue Breakdown.  Works with any (metric, dimension) combination
+    so the dashboard doesn't need to know what columns a dataset has in advance.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+    metric_col : str
+        Numeric column to aggregate (e.g. ``"profit"``, ``"rating"``).
+    dim_col : str
+        Categorical column to group by.
+    agg : str
+        Aggregation function — ``"sum"`` or ``"mean"``.
+    top_n : int
+        Keep the top-N groups by aggregated value.
+    """
+    if metric_col not in df.columns or dim_col not in df.columns:
+        fig = go.Figure()
+        fig.add_annotation(text=f"Column '{metric_col}' or '{dim_col}' not found",
+                           showarrow=False, font=dict(size=13))
+        return _base_layout(fig, f"{_label(metric_col)} by {_label(dim_col)}")
+
+    grouped = (
+        df.groupby(dim_col, observed=True)[metric_col]
+        .agg(agg)
+        .reset_index()
+        .rename(columns={metric_col: "value"})
+        .sort_values("value", ascending=True)
+        .tail(top_n)
+    )
+
+    is_monetary = "($)" in _label(metric_col)
+    tick_prefix = "$" if is_monetary else ""
+    agg_label   = "Total" if agg == "sum" else "Average"
+    y_title     = f"{agg_label} {_label(metric_col)}"
+
+    fig = px.bar(
+        grouped,
+        x                      = "value",
+        y                      = dim_col,
+        orientation            = "h",
+        color                  = "value",
+        color_continuous_scale = ["#DBEAFE", PRIMARY],
+        labels                 = {"value": y_title, dim_col: _label(dim_col)},
+        text                   = "value",
+    )
+    fig.update_traces(
+        texttemplate = (
+            f"{tick_prefix}%{{text:,.0f}}" if is_monetary else "%{text:,.2f}"
+        ),
+        textposition = "outside",
+    )
+    fig.update_layout(
+        xaxis_tickprefix = tick_prefix,
+        xaxis_tickformat = ",.0f",
+        coloraxis_showscale = False,
+    )
+    title = f"{agg_label} {_label(metric_col)} by {_label(dim_col)}"
+    return _base_layout(fig, title)
+
+
+def metric_distribution(
+    df: pd.DataFrame,
+    metric_col: str,
+    n_bins: int = 30,
+) -> go.Figure:
+    """Histogram showing the distribution of any numeric metric.
+
+    A generalisation of ``revenue_histogram`` that works on any column.
+    """
+    if metric_col not in df.columns:
+        fig = go.Figure()
+        fig.add_annotation(text=f"Column '{metric_col}' not available",
+                           showarrow=False, font=dict(size=13))
+        return _base_layout(fig, _label(metric_col))
+
+    series = pd.to_numeric(df[metric_col], errors="coerce").dropna()
+    is_monetary = "($)" in _label(metric_col)
+
+    fig = go.Figure(go.Histogram(
+        x       = series,
+        nbinsx  = n_bins,
+        marker  = dict(color=PRIMARY, line=dict(color="white", width=0.5)),
+        opacity = 0.85,
+    ))
+    fig.update_layout(
+        xaxis_title      = _label(metric_col),
+        yaxis_title      = "Number of Transactions",
+        xaxis_tickprefix = "$" if is_monetary else "",
+        xaxis_tickformat = ",.0f",
+        bargap           = 0.05,
+    )
+    return _base_layout(fig, f"Distribution of {_label(metric_col)}")

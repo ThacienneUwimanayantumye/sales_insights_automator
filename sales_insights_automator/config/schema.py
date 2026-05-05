@@ -63,7 +63,13 @@ REQUIRED_ROLES = ("order_id", "date", "revenue")
 
 OPTIONAL_ROLES = ("product", "category", "region", "sales_rep",
                   "quantity", "unit_price", "discount",
-                  "customer_id", "gender", "age")
+                  "customer_id", "gender", "age",
+                  # financial enrichment
+                  "profit", "cost",
+                  # transaction attributes
+                  "channel", "payment_method",
+                  # customer attributes
+                  "customer_segment", "return_flag", "rating")
 
 ALL_ROLES = REQUIRED_ROLES + OPTIONAL_ROLES
 
@@ -84,9 +90,16 @@ ROLE_DESCRIPTIONS = {
     "quantity":     "Number of units sold per transaction",
     "unit_price":   "Price per individual unit (before discount)",
     "discount":     "Discount applied (0.0–1.0 fraction, or percentage)",
-    "customer_id":  "Unique identifier per customer (enables repeat-purchase analysis)",
-    "gender":       "Customer gender (e.g. Male / Female) — used for demographic breakdowns",
-    "age":          "Customer age in years (numeric) — used for age-group breakdowns",
+    "customer_id":      "Unique identifier per customer (enables repeat-purchase analysis)",
+    "gender":           "Customer gender (e.g. Male / Female) — used for demographic breakdowns",
+    "age":              "Customer age in years (numeric) — used for age-group breakdowns",
+    "profit":           "Profit amount per transaction (revenue minus cost)",
+    "cost":             "Cost of goods sold per transaction",
+    "channel":          "Sales channel (e.g. Online, In-Store, Phone, App)",
+    "payment_method":   "Payment type (e.g. Credit Card, Cash, PayPal, Bank Transfer)",
+    "customer_segment": "Customer tier or loyalty segment (e.g. Gold, Silver, New)",
+    "return_flag":      "Return indicator — whether the transaction was returned (0/1 or Yes/No)",
+    "rating":           "Product or service rating / review score (typically 1–5 scale)",
 }
 
 
@@ -122,9 +135,22 @@ class SchemaConfig:
     discount:    Optional[str] = "discount_pct"
 
     # Optional — customer demographics
-    customer_id: Optional[str] = "customer_id"
-    gender:      Optional[str] = "gender"
-    age:         Optional[str] = "age"
+    customer_id:      Optional[str] = "customer_id"
+    gender:           Optional[str] = "gender"
+    age:              Optional[str] = "age"
+
+    # Optional — financial enrichment
+    profit:           Optional[str] = "profit"
+    cost:             Optional[str] = "cost"
+
+    # Optional — transaction attributes
+    channel:          Optional[str] = "channel"
+    payment_method:   Optional[str] = "payment_method"
+
+    # Optional — customer attributes
+    customer_segment: Optional[str] = "customer_segment"
+    return_flag:      Optional[str] = "return_flag"
+    rating:           Optional[str] = "rating"
 
     # ------------------------------------------------------------------ #
     # Core API                                                            #

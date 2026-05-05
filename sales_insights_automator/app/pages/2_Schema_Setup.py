@@ -181,6 +181,34 @@ if st.button("Apply Schema & Run Analysis", type="primary", disabled=apply_disab
             st.error(f"Analysis failed: {e}")
             st.stop()
 
+    # ── Discover extra dimensions and metrics not covered by schema roles ──
+    extras = SchemaWizard().discover_extras(clean_df, schema)
+    state.set(state.EXTRA_DIMS,    extras["dimensions"])
+    state.set(state.EXTRA_METRICS, extras["metrics"])
+
+    if extras["dimensions"] or extras["metrics"]:
+        def _pretty(col: str) -> str:
+            return col.replace("_", " ").title()
+
+        with st.expander("🔍 Additional columns discovered (used in dashboard)", expanded=True):
+            if extras["dimensions"]:
+                st.markdown(
+                    "**Extra breakdown dimensions** — these columns will appear "
+                    "as additional tabs in the Revenue Breakdown section:"
+                )
+                dim_md = "  ".join(f"`{_pretty(c)}`" for c in extras["dimensions"])
+                st.markdown(dim_md)
+            if extras["metrics"]:
+                st.markdown(
+                    "**Extra numeric metrics** — these will appear in the "
+                    "Additional Metrics section of the dashboard:"
+                )
+                met_md = "  ".join(f"`{_pretty(c)}`" for c in extras["metrics"])
+                st.markdown(met_md)
+    else:
+        state.set(state.EXTRA_DIMS,    [])
+        state.set(state.EXTRA_METRICS, [])
+
     st.info("Navigate to **📈 Dashboard** to explore the charts.")
     if st.button("Next → Dashboard", type="primary"):
         st.switch_page("pages/3_Dashboard.py")

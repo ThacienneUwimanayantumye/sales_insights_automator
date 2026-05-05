@@ -59,7 +59,11 @@ def compute_summary_stats(df: pd.DataFrame) -> Dict[str, float]:
       max_order_value     — largest single-order revenue
     """
     total_revenue = float(df[COL_REVENUE].sum())
-    total_orders  = int(df[COL_ORDER_ID].nunique())
+    total_orders  = (
+        int(df[COL_ORDER_ID].nunique())
+        if COL_ORDER_ID in df.columns
+        else len(df)   # fall back to row count when order_id is absent
+    )
 
     total_units = int(df[COL_QUANTITY].sum()) if COL_QUANTITY in df.columns else 0
 
@@ -111,11 +115,13 @@ def revenue_by_dimension(
         Sorted by ``total_revenue`` descending.
     """
     # Named aggregation: keys are output column names, values are (source_col, func)
+    # Use order_id for counting orders; fall back to counting revenue rows if absent.
+    count_col = COL_ORDER_ID if COL_ORDER_ID in df.columns else COL_REVENUE
     agg: Dict[str, object] = {
-        "total_revenue": (COL_REVENUE,  "sum"),
-        "order_count":   (COL_ORDER_ID, "count"),
+        "total_revenue": (COL_REVENUE, "sum"),
+        "order_count":   (count_col,   "count"),
     }
-    if include_units:
+    if include_units and COL_QUANTITY in df.columns:
         agg["total_units"] = (COL_QUANTITY, "sum")
 
     result = (
@@ -235,10 +241,11 @@ def sales_rep_performance(df: pd.DataFrame) -> pd.DataFrame:
                  [avg_discount_pct], [total_units], revenue_share_pct
         Sorted by total_revenue descending.
     """
+    count_col = COL_ORDER_ID if COL_ORDER_ID in df.columns else COL_REVENUE
     agg: Dict[str, object] = {
-        "total_revenue":   (COL_REVENUE,  "sum"),
-        "order_count":     (COL_ORDER_ID, "count"),
-        "avg_order_value": (COL_REVENUE,  "mean"),
+        "total_revenue":   (COL_REVENUE, "sum"),
+        "order_count":     (count_col,   "count"),
+        "avg_order_value": (COL_REVENUE, "mean"),
     }
     if COL_DISCOUNT in df.columns:
         agg["avg_discount_pct"] = (COL_DISCOUNT, "mean")
