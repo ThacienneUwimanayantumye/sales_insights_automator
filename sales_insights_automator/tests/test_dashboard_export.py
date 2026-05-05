@@ -65,6 +65,8 @@ def test_dashboard_zip_contains_expected_members():
 
 
 def test_dashboard_pdf_is_non_empty():
+    from types import SimpleNamespace
+
     from app.dashboard_export import dashboard_pdf_bytes
 
     live = {
@@ -75,13 +77,60 @@ def test_dashboard_pdf_is_non_empty():
         "average_discount_pct": 0.0,
         "median_order_value": 18.0,
     }
+    result = SimpleNamespace(regional_trend=pd.DataFrame(), discount_stats={})
     pdf_b = dashboard_pdf_bytes(
         live_stats=live,
+        fdf=pd.DataFrame(),
+        result=result,
         dims={},
-        monthly=pd.DataFrame({"m": ["2024-01"], "total_revenue": [100.0]}),
+        monthly=None,
         quarterly=None,
         dow=None,
+        rep_perf=None,
+        crosstab=None,
+        extra_dims=[],
+        extra_metrics=[],
         filter_note="No filters",
         base_name="test",
     )
     assert pdf_b.startswith(b"%PDF")
+
+
+def test_collect_dashboard_figures_includes_time_series():
+    from types import SimpleNamespace
+
+    from app.dashboard_pdf_figures import collect_dashboard_figures
+
+    monthly = pd.DataFrame({"month": ["2024-01", "2024-02"], "total_revenue": [40.0, 60.0]})
+    fdf = pd.DataFrame({"revenue": [10.0, 20.0], "quantity": [1, 2], "order_id": ["a", "b"]})
+    result = SimpleNamespace(regional_trend=pd.DataFrame(), discount_stats={})
+    figs = collect_dashboard_figures(
+        fdf=fdf,
+        result=result,
+        dims={},
+        monthly=monthly,
+        quarterly=None,
+        dow_chart=None,
+        rep_perf_df=None,
+        crosstab_df=None,
+        extra_dims=[],
+        extra_metrics=[],
+    )
+    assert len(figs) >= 3
+    titles = [t for _, t, _ in figs]
+    assert any("Monthly" in t for t in titles)
+    assert any("Cumulative" in t for t in titles)
+
+
+def test_figure_to_png_requires_kaleido():
+    pytest.importorskip("kaleido")
+    import plotly.graph_objects as go
+
+    from app.dashboard_export import DashboardPdfError, figure_to_png_bytes
+
+    fig = go.Figure(go.Bar(x=["a"], y=[1]))
+    try:
+        png = figure_to_png_bytes(fig, width=400, height=300)
+    except DashboardPdfError:
+        pytest.skip("Kaleido/Chromium not available in this environment")
+    assert png[:8] == b"\x89PNG\r\n\x1a\n"

@@ -13,9 +13,15 @@ from datetime import datetime, timezone
 from typing import Any, Mapping, Optional
 
 import pandas as pd
+import plotly.graph_objects as go
 from fpdf import FPDF, XPos, YPos
 
 from app.components.charts import _label
+from app.dashboard_pdf_figures import collect_dashboard_figures
+
+
+class DashboardPdfError(RuntimeError):
+    """PDF export failed (e.g. Kaleido not installed or chart render error)."""
 
 # ── Filenames & KPI display names ─────────────────────────────────────────────
 
@@ -148,33 +154,59 @@ class _DashPDF(FPDF):
         )
 
 
-def _pdf_table(pdf: FPDF, headers: list[str], rows: list[list[str]], col_widths: list[float]) -> None:
-    pdf.set_font("Helvetica", "B", 9)
-    for i, h in enumerate(headers):
-        pdf.cell(col_widths[i], 7, _sanitize_pdf_text(h), border=1)
-    pdf.ln()
-    pdf.set_font("Helvetica", "", 9)
-    for row in rows:
-        for i, cell in enumerate(row):
-            pdf.cell(col_widths[i], 6, _sanitize_pdf_text(str(cell)), border=1)
-        pdf.ln()
+def figure_to_png_bytes(
+    fig: go.Figure,
+    *,
+    width: int = 1280,
+    height: int = 720,
+) -> bytes:
+    """Rasterise a Plotly figure to PNG via Kaleido (required)."""
+    try:
+        out = fig.to_image(format="png", width=width, height=height)
+    except Exception as e:
+        raise DashboardPdfError(
+            "Could not render charts for PDF. Install Kaleido: pip install kaleido"
+        ) from e
+    return bytes(out) if isinstance(out, (bytes, bytearray)) else out
 
 
 def dashboard_pdf_bytes(
     *,
     live_stats: Mapping[str, Any],
+    fdf: pd.DataFrame,
+    result: Any,
     dims: dict[str, tuple[str, Optional[pd.DataFrame]]],
     monthly: Optional[pd.DataFrame],
     quarterly: Optional[pd.DataFrame],
     dow: Optional[pd.DataFrame],
+    rep_perf: Optional[pd.DataFrame],
+    crosstab: Optional[pd.DataFrame],
+    extra_dims: list[str],
+    extra_metrics: list[str],
     filter_note: str,
     base_name: str,
-    max_rows_per_table: int = 15,
+    chart_width: int = 1280,
+    chart_height: int = 720,
 ) -> bytes:
-    """Multi-page PDF: KPIs + compact tables (charts are not rendered)."""
+    """Multi-page PDF: KPI summary plus every dashboard chart as an embedded image."""
+    figures = collect_dashboard_figures(
+        fdf=fdf,
+        result=result,
+        dims=dims,
+        monthly=monthly,
+        quarterly=quarterly,
+        dow_chart=dow,
+        rep_perf_df=rep_perf,
+        crosstab_df=crosstab,
+        extra_dims=list(extra_dims or []),
+        extra_metrics=list(extra_metrics or []),
+    )
+
     pdf = _DashPDF()
     pdf.alias_nb_pages()
     pdf.set_auto_page_break(auto=True, margin=14)
+
+    # ── Cover + KPIs ──────────────────────────────────────────────────────────
     pdf.add_page()
     pdf.set_font("Helvetica", "B", 16)
     pdf.cell(
@@ -194,8 +226,6 @@ def dashboard_pdf_bytes(
     )
     pdf.multi_cell(0, 6, _sanitize_pdf_text(filter_note))
     pdf.ln(2)
-
-    # KPI block
     pdf.set_font("Helvetica", "B", 12)
     pdf.cell(
         0,
@@ -229,63 +259,57 @@ def dashboard_pdf_bytes(
             new_x=XPos.LMARGIN,
             new_y=YPos.NEXT,
         )
-    pdf.ln(4)
-
-    def _emit_df_section(title: str, df: Optional[pd.DataFrame]) -> None:
-        if df is None or df.empty:
-            return
-        disp = dataframe_with_display_columns(df.head(max_rows_per_table))
-        if disp.empty:
-            return
-        if pdf.get_y() > 250:
-            pdf.add_page()
-        pdf.set_font("Helvetica", "B", 11)
-        pdf.cell(
-            0,
-            7,
-            _sanitize_pdf_text(title),
-            new_x=XPos.LMARGIN,
-            new_y=YPos.NEXT,
-        )
-        cols = list(disp.columns)
-        w_avail = 190
-        cw = [max(28, w_avail / len(cols))] * len(cols)
-        s = cw[0] * len(cols)
-        if s > w_avail:
-            scale = w_avail / s
-            cw = [c * scale for c in cw]
-        rows = disp.astype(str).values.tolist()
-        _pdf_table(pdf, [str(c) for c in cols], rows, cw)
-        pdf.ln(3)
-        if len(df) > max_rows_per_table:
-            pdf.set_font("Helvetica", "I", 8)
-            pdf.cell(
-                0,
-                5,
-                f"(Showing first {max_rows_per_table} of {len(df)} rows — see ZIP/CSV for full data.)",
-                new_x=XPos.LMARGIN,
-                new_y=YPos.NEXT,
-            )
-            pdf.set_font("Helvetica", "", 10)
-            pdf.ln(2)
-
-    _emit_df_section("Monthly revenue (sample)", monthly)
-    _emit_df_section("Quarterly revenue (sample)", quarterly)
-    _emit_df_section("Revenue by day of week", dow)
-
-    for tab_label, (_col, data) in dims.items():
-        _emit_df_section(f"Revenue by {tab_label} (sample)", data)
-
+    pdf.ln(3)
     pdf.set_font("Helvetica", "I", 9)
-    pdf.ln(4)
     pdf.multi_cell(
         0,
         5,
         _sanitize_pdf_text(
-            "Note: This PDF contains tables only. Download the ZIP or CSV "
-            "for complete data and use the app for interactive charts."
+            "Following pages: static copies of the dashboard charts (current filters). "
+            "For raw data use CSV or ZIP export."
         ),
     )
+
+    # ── One chart per page ─────────────────────────────────────────────────────
+    img_w_mm = 190.0
+    for section, subtitle, fig in figures:
+        png = figure_to_png_bytes(fig, width=chart_width, height=chart_height)
+        pdf.add_page()
+        pdf.set_font("Helvetica", "B", 11)
+        pdf.cell(
+            0,
+            7,
+            _sanitize_pdf_text(section),
+            new_x=XPos.LMARGIN,
+            new_y=YPos.NEXT,
+        )
+        pdf.set_font("Helvetica", "", 9)
+        pdf.cell(
+            0,
+            5,
+            _sanitize_pdf_text(subtitle),
+            new_x=XPos.LMARGIN,
+            new_y=YPos.NEXT,
+        )
+        pdf.ln(1)
+        pdf.image(
+            io.BytesIO(png),
+            x=10,
+            w=img_w_mm,
+            keep_aspect_ratio=True,
+        )
+
+    if not figures:
+        pdf.add_page()
+        pdf.set_font("Helvetica", "", 11)
+        pdf.multi_cell(
+            0,
+            6,
+            _sanitize_pdf_text(
+                "No charts available for this view (empty data or missing columns). "
+                "Adjust filters or complete schema mapping, then try again."
+            ),
+        )
 
     raw = pdf.output()
     if isinstance(raw, (bytes, bytearray)):

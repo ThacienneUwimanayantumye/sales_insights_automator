@@ -12,6 +12,7 @@ Chart variety:
   Correlation    — scatter: quantity vs revenue
 """
 
+import hashlib
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
@@ -21,6 +22,7 @@ import streamlit as st
 
 from app import state
 from app import dashboard_export as dex
+from app.dashboard_export import DashboardPdfError
 from config.schema import ROLE_LABELS as _ROLE_LABELS
 from app.components.charts import (
     # existing
@@ -754,7 +756,9 @@ st.caption(
     "**JSON** is the full programmatic analysis result. "
     "**CSV** is row-level filtered data with readable column headers. "
     "**ZIP** bundles KPIs, transactions, and summary tables (monthly, breakdowns, day-of-week, etc.). "
-    "**PDF** is a printable snapshot of KPIs and table excerpts (charts stay in the app only)."
+    "**PDF** embeds **all dashboard charts** as static images (same filters as on screen), plus a KPI cover page. "
+    "Click **Generate** first (chart rendering uses Kaleido and can take up to a minute). "
+    "After changing filters, generate again. Requires: `pip install kaleido`."
 )
 
 export_base = dex.safe_export_basename(state.get(state.FILE_NAME, "sales_dashboard"))
@@ -765,6 +769,28 @@ if has_dates and sel_from and sel_to:
 if _active:
     _note_parts.append(f"{_active} active sidebar filter(s)")
 _export_filter_note = " · ".join(_note_parts) if _note_parts else "No filters applied — full cleaned dataset."
+
+
+def _fdf_fingerprint(df: pd.DataFrame) -> str:
+    if df is None or df.empty:
+        return "empty"
+    return hashlib.md5(
+        pd.util.hash_pandas_object(df, index=True).values.tobytes()
+    ).hexdigest()
+
+
+_dash_pdf_sig = (
+    _fdf_fingerprint(fdf),
+    round(float(live_stats.get("total_revenue") or 0), 4),
+    int(live_stats.get("total_orders") or 0),
+    _export_filter_note,
+    export_base,
+    tuple(extra_dims),
+    tuple(extra_metrics),
+)
+if st.session_state.get("_dash_pdf_sig") != _dash_pdf_sig:
+    st.session_state.pop("_dash_pdf_bytes", None)
+    st.session_state["_dash_pdf_sig"] = _dash_pdf_sig
 
 row_a, row_b = st.columns(2)
 row_c, row_d = st.columns(2)
@@ -811,21 +837,35 @@ with row_c:
 
 with row_d:
     if fdf is not None and not fdf.empty:
-        _pdf_data = dex.dashboard_pdf_bytes(
-            live_stats  = live_stats,
-            dims        = dims,
-            monthly     = monthly,
-            quarterly   = quarterly,
-            dow         = dow_chart,
-            filter_note = _export_filter_note,
-            base_name   = export_base,
-        )
-        st.download_button(
-            label     = "Dashboard summary (PDF)",
-            data      = _pdf_data,
-            file_name = f"{export_base}_dashboard_summary.pdf",
-            mime      = "application/pdf",
-        )
+        if st.button("Generate dashboard PDF", type="secondary", key="gen_dash_pdf"):
+            try:
+                with st.spinner("Rendering all charts for PDF (please wait)…"):
+                    st.session_state["_dash_pdf_bytes"] = dex.dashboard_pdf_bytes(
+                        live_stats     = live_stats,
+                        fdf            = fdf,
+                        result         = result,
+                        dims           = dims,
+                        monthly        = monthly,
+                        quarterly      = quarterly,
+                        dow            = dow_chart,
+                        rep_perf       = rep_perf_df,
+                        crosstab       = crosstab_df,
+                        extra_dims     = extra_dims,
+                        extra_metrics  = extra_metrics,
+                        filter_note    = _export_filter_note,
+                        base_name      = export_base,
+                    )
+            except DashboardPdfError as e:
+                st.session_state.pop("_dash_pdf_bytes", None)
+                st.error(str(e))
+        if st.session_state.get("_dash_pdf_bytes"):
+            st.download_button(
+                label     = "Download dashboard PDF",
+                data      = st.session_state["_dash_pdf_bytes"],
+                file_name = f"{export_base}_dashboard_charts.pdf",
+                mime      = "application/pdf",
+                key       = "dl_dash_pdf",
+            )
 
 st.markdown("---")
 st.success("Dashboard ready. Generate a written business report on the next page.")
