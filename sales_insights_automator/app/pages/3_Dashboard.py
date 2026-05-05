@@ -756,9 +756,10 @@ st.caption(
     "**JSON** is the full programmatic analysis result. "
     "**CSV** is row-level filtered data with readable column headers. "
     "**ZIP** bundles KPIs, transactions, and summary tables (monthly, breakdowns, day-of-week, etc.). "
-    "**PDF** embeds **all dashboard charts** as static images (same filters as on screen), plus a KPI cover page. "
-    "Click **Generate** first (chart rendering uses Kaleido and can take up to a minute). "
-    "After changing filters, generate again. Requires: `pip install kaleido`."
+    "**PDF** groups **related charts on the same page** (e.g. monthly + cumulative revenue; weekday + histogram). "
+    "Each image uses a **full print title** and a high-contrast style. "
+    "Click **Generate** (uses Kaleido; parallel rendering). After filters change, generate again. "
+    "Requires: `pip install kaleido`."
 )
 
 export_base = dex.safe_export_basename(state.get(state.FILE_NAME, "sales_dashboard"))
@@ -839,7 +840,7 @@ with row_d:
     if fdf is not None and not fdf.empty:
         if st.button("Generate dashboard PDF", type="secondary", key="gen_dash_pdf"):
             try:
-                with st.spinner("Rendering all charts for PDF (please wait)…"):
+                with st.spinner("Rendering grouped charts for PDF…"):
                     st.session_state["_dash_pdf_bytes"] = dex.dashboard_pdf_bytes(
                         live_stats     = live_stats,
                         fdf            = fdf,

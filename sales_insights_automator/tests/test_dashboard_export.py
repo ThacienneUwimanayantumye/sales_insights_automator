@@ -96,15 +96,15 @@ def test_dashboard_pdf_is_non_empty():
     assert pdf_b.startswith(b"%PDF")
 
 
-def test_collect_dashboard_figures_includes_time_series():
+def test_collect_dashboard_pdf_groups_includes_time_series():
     from types import SimpleNamespace
 
-    from app.dashboard_pdf_figures import collect_dashboard_figures
+    from app.dashboard_pdf_figures import collect_dashboard_pdf_groups
 
     monthly = pd.DataFrame({"month": ["2024-01", "2024-02"], "total_revenue": [40.0, 60.0]})
     fdf = pd.DataFrame({"revenue": [10.0, 20.0], "quantity": [1, 2], "order_id": ["a", "b"]})
     result = SimpleNamespace(regional_trend=pd.DataFrame(), discount_stats={})
-    figs = collect_dashboard_figures(
+    groups = collect_dashboard_pdf_groups(
         fdf=fdf,
         result=result,
         dims={},
@@ -116,10 +116,10 @@ def test_collect_dashboard_figures_includes_time_series():
         extra_dims=[],
         extra_metrics=[],
     )
-    assert len(figs) >= 3
-    titles = [t for _, t, _ in figs]
-    assert any("Monthly" in t for t in titles)
-    assert any("Cumulative" in t for t in titles)
+    assert groups
+    first = groups[0]
+    assert first.section_heading == "Revenue over time"
+    assert len(first.charts) >= 2
 
 
 def test_figure_to_png_requires_kaleido():
@@ -130,7 +130,7 @@ def test_figure_to_png_requires_kaleido():
 
     fig = go.Figure(go.Bar(x=["a"], y=[1]))
     try:
-        png = figure_to_png_bytes(fig, width=400, height=300)
+        png = figure_to_png_bytes(fig, export_title="Test chart — sample bar", width=400, height=300)
     except DashboardPdfError:
         pytest.skip("Kaleido/Chromium not available in this environment")
     assert png[:8] == b"\x89PNG\r\n\x1a\n"

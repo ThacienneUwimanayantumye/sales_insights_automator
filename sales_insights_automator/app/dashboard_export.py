@@ -13,11 +13,13 @@ from datetime import datetime, timezone
 from typing import Any, Mapping, Optional
 
 import pandas as pd
+from concurrent.futures import ThreadPoolExecutor
+
 import plotly.graph_objects as go
 from fpdf import FPDF, XPos, YPos
 
-from app.components.charts import _label
-from app.dashboard_pdf_figures import collect_dashboard_figures
+from app.components.charts import _label, apply_static_export_style
+from app.dashboard_pdf_figures import PdfChartItem, collect_dashboard_pdf_groups
 
 
 class DashboardPdfError(RuntimeError):
@@ -157,17 +159,39 @@ class _DashPDF(FPDF):
 def figure_to_png_bytes(
     fig: go.Figure,
     *,
-    width: int = 1280,
-    height: int = 720,
+    export_title: str,
+    width: int = 1050,
+    height: int = 520,
 ) -> bytes:
-    """Rasterise a Plotly figure to PNG via Kaleido (required)."""
+    """Rasterise a Plotly figure to PNG (Kaleido) with print-friendly styling."""
+    f2 = go.Figure(fig)
+    apply_static_export_style(f2, document_title=export_title)
     try:
-        out = fig.to_image(format="png", width=width, height=height)
+        out = f2.to_image(format="png", width=width, height=height)
     except Exception as e:
         raise DashboardPdfError(
             "Could not render charts for PDF. Install Kaleido: pip install kaleido"
         ) from e
     return bytes(out) if isinstance(out, (bytes, bytearray)) else out
+
+
+def _pngs_for_chart_items(
+    items: list[PdfChartItem],
+    *,
+    width: int,
+    height: int,
+    max_workers: int = 6,
+) -> list[bytes]:
+    """Render chart items to PNG in parallel (order preserved)."""
+    if not items:
+        return []
+    workers = max(1, min(max_workers, len(items)))
+
+    def _one(it: PdfChartItem) -> bytes:
+        return figure_to_png_bytes(it.figure, export_title=it.export_title, width=width, height=height)
+
+    with ThreadPoolExecutor(max_workers=workers) as ex:
+        return list(ex.map(_one, items))
 
 
 def dashboard_pdf_bytes(
@@ -185,11 +209,11 @@ def dashboard_pdf_bytes(
     extra_metrics: list[str],
     filter_note: str,
     base_name: str,
-    chart_width: int = 1280,
-    chart_height: int = 720,
+    chart_width: int = 1050,
+    chart_height: int = 520,
 ) -> bytes:
-    """Multi-page PDF: KPI summary plus every dashboard chart as an embedded image."""
-    figures = collect_dashboard_figures(
+    """Multi-page PDF: KPI cover, then grouped chart pages (related charts stacked)."""
+    groups = collect_dashboard_pdf_groups(
         fdf=fdf,
         result=result,
         dims=dims,
@@ -265,41 +289,45 @@ def dashboard_pdf_bytes(
         0,
         5,
         _sanitize_pdf_text(
-            "Following pages: static copies of the dashboard charts (current filters). "
-            "For raw data use CSV or ZIP export."
+            "Following pages group related charts on one page (same insight, multiple views). "
+            "Each image has a full title. Raw data: CSV or ZIP export."
         ),
     )
 
-    # ── One chart per page ─────────────────────────────────────────────────────
     img_w_mm = 190.0
-    for section, subtitle, fig in figures:
-        png = figure_to_png_bytes(fig, width=chart_width, height=chart_height)
-        pdf.add_page()
-        pdf.set_font("Helvetica", "B", 11)
-        pdf.cell(
-            0,
-            7,
-            _sanitize_pdf_text(section),
-            new_x=XPos.LMARGIN,
-            new_y=YPos.NEXT,
-        )
-        pdf.set_font("Helvetica", "", 9)
-        pdf.cell(
-            0,
-            5,
-            _sanitize_pdf_text(subtitle),
-            new_x=XPos.LMARGIN,
-            new_y=YPos.NEXT,
-        )
-        pdf.ln(1)
-        pdf.image(
-            io.BytesIO(png),
-            x=10,
-            w=img_w_mm,
-            keep_aspect_ratio=True,
-        )
+    y_break = 255.0
 
-    if not figures:
+    for grp in groups:
+        pngs = _pngs_for_chart_items(
+            grp.charts,
+            width=chart_width,
+            height=chart_height,
+            max_workers=6,
+        )
+        pdf.add_page()
+        pdf.set_font("Helvetica", "B", 13)
+        pdf.cell(
+            0,
+            8,
+            _sanitize_pdf_text(grp.section_heading),
+            new_x=XPos.LMARGIN,
+            new_y=YPos.NEXT,
+        )
+        pdf.set_font("Helvetica", "I", 9)
+        pdf.multi_cell(0, 4, _sanitize_pdf_text(grp.blurb))
+        pdf.ln(1)
+
+        for png in pngs:
+            if pdf.get_y() > y_break:
+                pdf.add_page()
+            pdf.image(
+                io.BytesIO(png),
+                x=10,
+                w=img_w_mm,
+                keep_aspect_ratio=True,
+            )
+
+    if not groups:
         pdf.add_page()
         pdf.set_font("Helvetica", "", 11)
         pdf.multi_cell(

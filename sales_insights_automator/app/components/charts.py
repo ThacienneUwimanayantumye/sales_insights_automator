@@ -77,6 +77,86 @@ def _base_layout(fig: go.Figure, title: str = "") -> go.Figure:
     return fig
 
 
+# ── Static export (PNG / PDF) — high contrast, readable on white paper ───────
+
+_EXPORT_PAPER = "#FFFFFF"
+_EXPORT_PLOT  = "#F3F4F6"
+_EXPORT_TEXT  = "#111827"
+_EXPORT_GRID  = "#D1D5DB"
+_EXPORT_MUTED = "#4B5563"
+
+
+def apply_static_export_style(fig: go.Figure, *, document_title: str) -> go.Figure:
+    """Restyle a figure for print/PDF: white background, large title, legible axes.
+
+    Call on a **copy** of the figure (e.g. ``go.Figure(fig)``) before ``to_image``;
+    the interactive dashboard figure is left unchanged.
+    """
+    fig.update_layout(
+        title=dict(
+            text=document_title,
+            font=dict(size=18, color=_EXPORT_TEXT, family="Arial, Helvetica, sans-serif"),
+            x=0.02,
+            xanchor="left",
+            y=0.97,
+            yanchor="top",
+        ),
+        paper_bgcolor=_EXPORT_PAPER,
+        plot_bgcolor=_EXPORT_PLOT,
+        font=dict(color=_EXPORT_TEXT, size=12, family="Arial, Helvetica, sans-serif"),
+        margin=dict(t=76, l=56, r=40, b=52),
+        legend=dict(
+            font=dict(size=11, color=_EXPORT_TEXT),
+            bgcolor="rgba(255,255,255,0.95)",
+            bordercolor=_EXPORT_GRID,
+            borderwidth=1,
+            orientation="h",
+            yanchor="top",
+            y=-0.22,
+            x=0.5,
+            xanchor="center",
+        ),
+        hovermode="closest",
+    )
+    fig.update_xaxes(
+        title_font=dict(size=13, color=_EXPORT_TEXT),
+        tickfont=dict(size=11, color=_EXPORT_MUTED),
+        gridcolor=_EXPORT_GRID,
+        showgrid=True,
+        zeroline=False,
+    )
+    fig.update_yaxes(
+        title_font=dict(size=13, color=_EXPORT_TEXT),
+        tickfont=dict(size=11, color=_EXPORT_MUTED),
+        gridcolor=_EXPORT_GRID,
+        showgrid=True,
+        zeroline=False,
+    )
+    # Remove outside bar labels (often crowded or clipped in static export)
+    fig.update_traces(
+        patch=dict(text=None, textposition="none"),
+        selector=dict(type="bar"),
+    )
+    # Pie / donut: slightly smaller slice labels for export
+    fig.update_traces(
+        patch=dict(textfont=dict(size=11, color=_EXPORT_TEXT)),
+        selector=dict(type="pie"),
+    )
+    # Polar charts
+    if getattr(fig.layout, "polar", None) is not None:
+        fig.update_layout(
+            polar=dict(
+                bgcolor=_EXPORT_PLOT,
+                radialaxis=dict(
+                    gridcolor=_EXPORT_GRID,
+                    tickfont=dict(size=10, color=_EXPORT_MUTED),
+                ),
+                angularaxis=dict(tickfont=dict(size=11, color=_EXPORT_MUTED)),
+            ),
+        )
+    return fig
+
+
 # ── 1. Monthly revenue trend ──────────────────────────────────────────────────
 
 def revenue_trend(monthly_df: pd.DataFrame) -> go.Figure:
