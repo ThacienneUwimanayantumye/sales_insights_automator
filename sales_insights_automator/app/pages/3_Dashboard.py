@@ -20,6 +20,7 @@ import pandas as pd
 import streamlit as st
 
 from app import state
+from app import dashboard_export as dex
 from config.schema import ROLE_LABELS as _ROLE_LABELS
 from app.components.charts import (
     # existing
@@ -203,6 +204,14 @@ def safe_summary(df: pd.DataFrame) -> dict:
 
 live_stats = safe_summary(fdf)
 
+# Day-of-week aggregate (polar chart + export bundle)
+dow_chart = result.revenue_by_weekday
+if fdf is not None and not fdf.empty:
+    try:
+        dow_chart = t.revenue_by_day_of_week(fdf)
+    except Exception:
+        dow_chart = result.revenue_by_weekday
+
 # Compare against full-dataset stats for delta indicators
 full_stats = result.summary_stats
 
@@ -382,6 +391,21 @@ for _edim in extra_dims:
     if _edim in fdf.columns and _label(_edim) not in dims:
         dims[_label(_edim)] = (_edim, dim_data(fdf, _edim))
 
+# Shared aggregates for charts + export (avoid duplicate metric calls)
+rep_perf_df = None
+if fdf is not None and not fdf.empty and "sales_rep" in fdf.columns:
+    try:
+        rep_perf_df = m.sales_rep_performance(fdf)
+    except Exception:
+        rep_perf_df = None
+
+crosstab_df = None
+if fdf is not None and not fdf.empty and "category" in fdf.columns and "region" in fdf.columns:
+    try:
+        crosstab_df = m.category_region_crosstab(fdf)
+    except Exception:
+        crosstab_df = None
+
 if dims:
     dim_tabs = st.tabs(list(dims.keys()))
     for tab, (label, (col, data)) in zip(dim_tabs, dims.items()):
@@ -419,21 +443,15 @@ if dims:
     # Sales rep — special dual-axis chart needs avg_order_value, so compute
     # it fresh from the filtered df using the dedicated metrics function
     # (the generic dim_data result doesn't include avg_order_value)
-    if "sales_rep" in fdf.columns:
-        try:
-            rep_perf = m.sales_rep_performance(fdf)
-            if rep_perf is not None and not rep_perf.empty:
-                st.markdown("#### Salesperson Performance (revenue + avg order value)")
-                st.plotly_chart(sales_rep_performance(rep_perf), width="stretch")
-        except Exception:
-            pass
+    if rep_perf_df is not None and not rep_perf_df.empty:
+        st.markdown("#### Salesperson Performance (revenue + avg order value)")
+        st.plotly_chart(sales_rep_performance(rep_perf_df), width="stretch")
 
     # Category × Region heatmap when both are present
-    if "Product Category" in dims and "Region" in dims:
+    if "Product Category" in dims and "Region" in dims and crosstab_df is not None:
         try:
-            crosstab = m.category_region_crosstab(fdf)
             st.markdown("#### Category × Region Revenue Heatmap")
-            st.plotly_chart(category_heatmap(crosstab), width="stretch")
+            st.plotly_chart(category_heatmap(crosstab_df), width="stretch")
         except Exception:
             pass
 else:
@@ -454,17 +472,8 @@ st.caption(
 col_polar, col_hist = st.columns([1, 1])
 
 with col_polar:
-    dow = None
-    if fdf is not None and not fdf.empty:
-        try:
-            dow = t.revenue_by_day_of_week(fdf)
-        except Exception:
-            dow = result.revenue_by_weekday
-    else:
-        dow = result.revenue_by_weekday
-
-    if dow is not None and not dow.empty:
-        st.plotly_chart(weekday_polar(dow), width="stretch")
+    if dow_chart is not None and not dow_chart.empty:
+        st.plotly_chart(weekday_polar(dow_chart), width="stretch")
     else:
         st.info("Day-of-week data not available.")
 
@@ -740,21 +749,82 @@ st.markdown("---")
 
 # ── Section 8: Export ─────────────────────────────────────────────────────────
 st.subheader("Export")
-col_dl1, col_dl2 = st.columns(2)
-with col_dl1:
+st.caption(
+    "Exports use the **current view** (sidebar date range and dimension filters). "
+    "**JSON** is the full programmatic analysis result. "
+    "**CSV** is row-level filtered data with readable column headers. "
+    "**ZIP** bundles KPIs, transactions, and summary tables (monthly, breakdowns, day-of-week, etc.). "
+    "**PDF** is a printable snapshot of KPIs and table excerpts (charts stay in the app only)."
+)
+
+export_base = dex.safe_export_basename(state.get(state.FILE_NAME, "sales_dashboard"))
+
+_note_parts: list[str] = []
+if has_dates and sel_from and sel_to:
+    _note_parts.append(f"Date range: {sel_from} → {sel_to}")
+if _active:
+    _note_parts.append(f"{_active} active sidebar filter(s)")
+_export_filter_note = " · ".join(_note_parts) if _note_parts else "No filters applied — full cleaned dataset."
+
+row_a, row_b = st.columns(2)
+row_c, row_d = st.columns(2)
+
+with row_a:
     st.download_button(
-        label     = "Download full analysis (JSON)",
+        label     = "Full analysis (JSON)",
         data      = result.to_json(),
-        file_name = "analysis_result.json",
+        file_name = f"{export_base}_analysis.json",
         mime      = "application/json",
     )
-with col_dl2:
+
+with row_b:
     if fdf is not None and not fdf.empty:
         st.download_button(
-            label     = "Download filtered data (CSV)",
-            data      = fdf.to_csv(index=False),
-            file_name = "filtered_sales.csv",
+            label     = "Filtered transactions (CSV)",
+            data      = dex.filtered_transactions_csv_bytes(fdf),
+            file_name = f"{export_base}_transactions.csv",
             mime      = "text/csv",
+        )
+    else:
+        st.caption("No rows in the current filter — adjust filters to export CSV.")
+
+with row_c:
+    if fdf is not None and not fdf.empty:
+        _zip_data = dex.dashboard_zip_bytes(
+            live_stats       = live_stats,
+            fdf              = fdf,
+            dims             = dims,
+            monthly          = monthly,
+            quarterly        = quarterly,
+            dow              = dow_chart,
+            rep_perf         = rep_perf_df,
+            crosstab         = crosstab_df,
+            filter_note      = _export_filter_note,
+            base_name        = export_base,
+        )
+        st.download_button(
+            label     = "Dashboard tables (ZIP)",
+            data      = _zip_data,
+            file_name = f"{export_base}_dashboard_tables.zip",
+            mime      = "application/zip",
+        )
+
+with row_d:
+    if fdf is not None and not fdf.empty:
+        _pdf_data = dex.dashboard_pdf_bytes(
+            live_stats  = live_stats,
+            dims        = dims,
+            monthly     = monthly,
+            quarterly   = quarterly,
+            dow         = dow_chart,
+            filter_note = _export_filter_note,
+            base_name   = export_base,
+        )
+        st.download_button(
+            label     = "Dashboard summary (PDF)",
+            data      = _pdf_data,
+            file_name = f"{export_base}_dashboard_summary.pdf",
+            mime      = "application/pdf",
         )
 
 st.markdown("---")
