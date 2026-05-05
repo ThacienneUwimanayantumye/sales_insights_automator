@@ -35,7 +35,7 @@ _LABEL: dict = {
     "category":         "Product Category",
     "region":           "Region",
     "product":          "Product",
-    "sales_rep":        "Sales Representative",
+    "sales_rep":        "Salesperson",
     "quantity":         "Units Sold",
     "unit_price":       "Price per Unit ($)",
     "discount_pct":     "Discount (%)",
@@ -190,7 +190,7 @@ def sales_rep_performance(df: pd.DataFrame) -> go.Figure:
         yaxis2 = dict(title="Avg Order ($)", overlaying="y", side="right",
                       tickprefix="$", tickformat=",.0f", showgrid=False),
     )
-    return _base_layout(fig, "Sales Rep Performance")
+    return _base_layout(fig, "Salesperson Performance")
 
 
 # ── 4. Revenue by weekday ─────────────────────────────────────────────────────

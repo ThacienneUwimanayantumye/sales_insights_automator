@@ -20,6 +20,7 @@ import pandas as pd
 import streamlit as st
 
 from app import state
+from config.schema import ROLE_LABELS as _ROLE_LABELS
 from app.components.charts import (
     # existing
     revenue_trend,
@@ -370,7 +371,7 @@ dims = {}
 if "category"  in fdf.columns: dims["Product Category"] = ("category",  dim_data(fdf, "category"))
 if "region"    in fdf.columns: dims["Region"]            = ("region",    dim_data(fdf, "region"))
 if "product"   in fdf.columns: dims["Product"]           = ("product",   dim_data(fdf, "product"))
-if "sales_rep" in fdf.columns: dims["Sales Rep"]         = ("sales_rep", dim_data(fdf, "sales_rep"))
+if "sales_rep" in fdf.columns: dims[_ROLE_LABELS["sales_rep"]] = ("sales_rep", dim_data(fdf, "sales_rep"))
 # New Layer 1 roles
 if "channel"          in fdf.columns: dims[_label("channel")]          = ("channel",          dim_data(fdf, "channel"))
 if "payment_method"   in fdf.columns: dims[_label("payment_method")]   = ("payment_method",   dim_data(fdf, "payment_method"))
@@ -422,7 +423,7 @@ if dims:
         try:
             rep_perf = m.sales_rep_performance(fdf)
             if rep_perf is not None and not rep_perf.empty:
-                st.markdown("#### Sales Rep Performance (revenue + avg order value)")
+                st.markdown("#### Salesperson Performance (revenue + avg order value)")
                 st.plotly_chart(sales_rep_performance(rep_perf), width="stretch")
         except Exception:
             pass
@@ -438,7 +439,7 @@ if dims:
 else:
     st.info(
         "No breakdown dimensions available for this dataset. "
-        "Map **category**, **region**, **product**, or **sales_rep** in Schema Setup to enable these charts."
+        "Map **Product Category**, **Region**, **Product**, or **Salesperson** in Schema Setup to enable these charts."
     )
 
 st.markdown("---")

@@ -79,6 +79,31 @@ ALL_ROLES = REQUIRED_ROLES + OPTIONAL_ROLES
 STANDARD_NAMES: dict = {role: role for role in ALL_ROLES}
 STANDARD_NAMES["discount"] = "discount_pct"
 
+# Human-readable labels shown in the UI (wizard dropdowns, mapping table, dashboard).
+# Always prefer these over raw role keys when displaying text to users.
+ROLE_LABELS = {
+    "order_id":         "Order ID",
+    "date":             "Date",
+    "revenue":          "Revenue",
+    "product":          "Product",
+    "category":         "Product Category",
+    "region":           "Region",
+    "sales_rep":        "Salesperson",
+    "quantity":         "Quantity",
+    "unit_price":       "Unit Price",
+    "discount":         "Discount",
+    "customer_id":      "Customer ID",
+    "gender":           "Gender",
+    "age":              "Age",
+    "profit":           "Profit",
+    "cost":             "Cost",
+    "channel":          "Sales Channel",
+    "payment_method":   "Payment Method",
+    "customer_segment": "Customer Segment",
+    "return_flag":      "Return Status",
+    "rating":           "Rating",
+}
+
 ROLE_DESCRIPTIONS = {
     "order_id":     "Unique identifier per transaction (e.g. order ID, receipt number)",
     "date":         "Transaction date / timestamp",

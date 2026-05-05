@@ -14,7 +14,7 @@ import pandas as pd
 import streamlit as st
 
 from app import state
-from config.schema import SchemaConfig, ALL_ROLES, REQUIRED_ROLES, ROLE_DESCRIPTIONS
+from config.schema import SchemaConfig, ALL_ROLES, REQUIRED_ROLES, ROLE_DESCRIPTIONS, ROLE_LABELS
 from profiling.schema_wizard import SchemaWizard
 from cleaning.cleaner import DataCleaner
 from cleaning.config import CleaningConfig
@@ -89,7 +89,8 @@ right_roles   = role_list[half:]
 
 def role_selector(role: str, container) -> None:
     required  = role in REQUIRED_ROLES
-    label     = f"{'✱ ' if required else ''}{role}"
+    display   = ROLE_LABELS.get(role, role.replace("_", " ").title())
+    label     = f"{'✱ ' if required else ''}{display}"
     help_text = ROLE_DESCRIPTIONS[role]
     current   = mapping.get(role)
 
@@ -130,9 +131,10 @@ else:
 with st.expander("Current mapping summary"):
     rows = []
     for role in ALL_ROLES:
-        actual = mapping.get(role)
+        actual   = mapping.get(role)
+        display  = ROLE_LABELS.get(role, role.replace("_", " ").title())
         rows.append({
-            "Role":     ("✱ " if role in REQUIRED_ROLES else "  ") + role,
+            "Role":     ("✱ " if role in REQUIRED_ROLES else "  ") + display,
             "Maps to":  actual if actual else "— not mapped —",
             "Required": "Yes" if role in REQUIRED_ROLES else "No",
         })
