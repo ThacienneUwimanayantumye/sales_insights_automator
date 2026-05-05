@@ -118,23 +118,51 @@ def _filterable_cols(df: pd.DataFrame) -> list:
 
 dim_filter_cols = _filterable_cols(clean_df)
 
-# One multiselect per filterable column — no hardcoded column names anywhere
+# ── Per-dimension filter: "All" checkbox + individual multiselect ─────────────
+# Default state is "All selected" (clean sidebar).  Unchecking "All" reveals
+# a multiselect so the user picks specific values without having to manually
+# deselect a long list.
 col_filters: dict = {}
-for _col in dim_filter_cols:
-    _all_vals = sorted(clean_df[_col].dropna().astype(str).unique().tolist())
-    _sel = st.sidebar.multiselect(
-        _label(_col),
-        options = _all_vals,
-        default = _all_vals,
-        key     = f"filter_{_col}",
-    )
-    col_filters[_col] = _sel if _sel else _all_vals  # never empty
+
+if dim_filter_cols:
+    # "Reset all filters" button — clears every filter back to All
+    if st.sidebar.button("↺ Reset all filters", key="reset_all_filters"):
+        for _c in dim_filter_cols:
+            st.session_state.pop(f"use_all_{_c}", None)
+            st.session_state.pop(f"filter_{_c}", None)
+        st.rerun()
+
+    for _col in dim_filter_cols:
+        _all_vals = sorted(clean_df[_col].dropna().astype(str).unique().tolist())
+        n_unique  = len(_all_vals)
+
+        # Header row: label + value count badge
+        st.sidebar.markdown(
+            f"<span style='font-weight:600'>{_label(_col)}</span>"
+            f"<span style='color:grey; font-size:0.8em'> &nbsp;{n_unique} values</span>",
+            unsafe_allow_html=True,
+        )
+
+        _use_all = st.sidebar.checkbox(
+            "All",
+            value = st.session_state.get(f"use_all_{_col}", True),
+            key   = f"use_all_{_col}",
+        )
+
+        if _use_all:
+            col_filters[_col] = _all_vals
+        else:
+            _sel = st.sidebar.multiselect(
+                _label(_col),
+                options          = _all_vals,
+                default          = st.session_state.get(f"filter_{_col}", _all_vals[:1]),
+                key              = f"filter_{_col}",
+                label_visibility = "collapsed",
+            )
+            col_filters[_col] = _sel if _sel else _all_vals
 
 st.sidebar.markdown("---")
-_active = sum(
-    1 for col, sel in col_filters.items()
-    if sel != sorted(clean_df[col].dropna().astype(str).unique().tolist())
-)
+_active = sum(1 for _c in col_filters if not st.session_state.get(f"use_all_{_c}", True))
 st.sidebar.caption(
     (f"**{_active} filter(s) active.** " if _active else "No filters active. ")
     + "Filters apply to all KPIs and charts on this page."

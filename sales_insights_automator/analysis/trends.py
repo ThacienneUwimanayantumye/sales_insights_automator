@@ -57,11 +57,16 @@ def monthly_revenue(
     df = df.dropna(subset=[date_col])
     df = df.set_index(date_col)
 
-    monthly = df.resample(freq).agg(
-        total_revenue=(COL_REVENUE,   "sum"),
-        total_units  =(COL_QUANTITY,  "sum"),
-        order_count  =(COL_ORDER_ID,  "count"),
-    ).reset_index()
+    # Build agg dict defensively — only include columns that actually exist
+    _count_col = COL_ORDER_ID if COL_ORDER_ID in df.columns else COL_REVENUE
+    _monthly_agg: dict = {
+        "total_revenue": (COL_REVENUE, "sum"),
+        "order_count":   (_count_col,  "count"),
+    }
+    if COL_QUANTITY in df.columns:
+        _monthly_agg["total_units"] = (COL_QUANTITY, "sum")
+
+    monthly = df.resample(freq).agg(**_monthly_agg).reset_index()
 
     monthly.rename(columns={date_col: "month"}, inplace=True)
     monthly["month"] = monthly["month"].dt.to_period("M").astype(str)
@@ -178,13 +183,14 @@ def revenue_by_day_of_week(
     day_order = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
     df["day_of_week"] = df[date_col].dt.day_name()
 
+    _count_col = COL_ORDER_ID if COL_ORDER_ID in df.columns else COL_REVENUE
     result = (
         df.groupby("day_of_week")
-        .agg(
-            total_revenue  =(COL_REVENUE,   "sum"),
-            order_count    =(COL_ORDER_ID,  "count"),
-            avg_order_value=(COL_REVENUE,   "mean"),
-        )
+        .agg(**{
+            "total_revenue":   (COL_REVENUE, "sum"),
+            "order_count":     (_count_col,  "count"),
+            "avg_order_value": (COL_REVENUE, "mean"),
+        })
         .reindex(day_order)
         .reset_index()
     )
@@ -249,14 +255,15 @@ def quarterly_revenue(
     df = df.dropna(subset=[date_col])
     df = df.set_index(date_col)
 
-    agg: dict = {
-        "total_revenue": (COL_REVENUE,  "sum"),
-        "order_count":   (COL_ORDER_ID, "count"),
+    _count_col = COL_ORDER_ID if COL_ORDER_ID in df.columns else COL_REVENUE
+    _q_agg: dict = {
+        "total_revenue": (COL_REVENUE, "sum"),
+        "order_count":   (_count_col,  "count"),
     }
     if COL_QUANTITY in df.columns:
-        agg["total_units"] = (COL_QUANTITY, "sum")
+        _q_agg["total_units"] = (COL_QUANTITY, "sum")
 
-    quarterly = df.resample("QE").agg(**agg).reset_index()
+    quarterly = df.resample("QE").agg(**_q_agg).reset_index()
     quarterly.rename(columns={date_col: "_qdate"}, inplace=True)
     quarterly["quarter"] = quarterly["_qdate"].dt.to_period("Q").astype(str)
     quarterly["year"]    = quarterly["_qdate"].dt.year
