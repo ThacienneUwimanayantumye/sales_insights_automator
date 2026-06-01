@@ -196,6 +196,26 @@ class TestHelpers:
             assert role in s
 
 
+class TestCleaningTypeConversions:
+    """Cleaning pipeline dtypes derived from schema (JSON-safe ingestion)."""
+
+    def test_maps_numeric_roles_to_cleaner_dtypes(self, custom_schema):
+        conv = custom_schema.cleaning_type_conversions()
+        assert conv["sale_date"] == "datetime"
+        assert conv["total_sales"] == "float"
+        assert conv["qty"] == "int"
+        assert conv["price"] == "float"
+        assert conv["disc"] == "float"
+
+    def test_omits_unmapped_optional_roles(self):
+        # Match wizard output: every role key present; unmapped → None (not dataclass defaults).
+        d = {role: None for role in ALL_ROLES}
+        d.update({"order_id": "oid", "date": "txn_date", "revenue": "amt"})
+        schema = SchemaConfig.from_dict(d)
+        conv = schema.cleaning_type_conversions()
+        assert conv == {"txn_date": "datetime", "amt": "float"}
+
+
 # ── SchemaWizard: auto-detection ──────────────────────────────────────────────
 
 class TestSchemaWizardDetect:

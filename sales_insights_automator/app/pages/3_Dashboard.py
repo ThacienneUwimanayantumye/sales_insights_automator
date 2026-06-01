@@ -23,6 +23,7 @@ import streamlit as st
 from app import state
 from app import dashboard_export as dex
 from app.dashboard_export import DashboardPdfError
+from app.theme import apply_page_theme, html_muted_color
 from config.schema import ROLE_LABELS as _ROLE_LABELS
 from app.components.charts import (
     # existing
@@ -52,6 +53,8 @@ from analysis import metrics as m
 from analysis import trends as t
 
 st.set_page_config(page_title="Dashboard", page_icon="📈", layout="wide")
+
+apply_page_theme()
 
 # ── Guard: need analysis result ───────────────────────────────────────────────
 if not state.has(state.ANALYSIS_RESULT):
@@ -142,8 +145,8 @@ if dim_filter_cols:
 
         # Header row: label + value count badge
         st.sidebar.markdown(
-            f"<span style='font-weight:600'>{_label(_col)}</span>"
-            f"<span style='color:grey; font-size:0.8em'> &nbsp;{n_unique} values</span>",
+            f"<span style='font-weight:600;color:inherit'>{_label(_col)}</span>"
+            f"<span style='color:{html_muted_color()}; font-size:0.8em'> &nbsp;{n_unique} values</span>",
             unsafe_allow_html=True,
         )
 

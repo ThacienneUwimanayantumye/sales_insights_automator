@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import streamlit as st
 from app import state
+from app.theme import apply_page_theme
 
 # ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -23,6 +24,8 @@ st.set_page_config(
     layout     = "wide",
     initial_sidebar_state = "expanded",
 )
+
+apply_page_theme()
 
 # ── Sidebar progress tracker ──────────────────────────────────────────────────
 def sidebar_progress() -> None:
@@ -64,7 +67,7 @@ col1, col2, col3, col4 = st.columns(4)
 with col1:
     st.markdown("### 📂 Upload & Profile")
     st.markdown(
-        "Upload a CSV file or connect a SQLite database. "
+        "Upload a CSV or TSV file or connect a SQLite database. "
         "The tool immediately runs a **data quality report** — "
         "missing values, duplicates, outliers, and a quality score."
     )

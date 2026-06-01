@@ -34,6 +34,9 @@ KAGGLE_DOWNLOAD_DIR: str = str(RAW_DIR / "kaggle")
 GDRIVE_CREDENTIALS_PATH: str = os.getenv(
     "GDRIVE_CREDENTIALS_PATH", str(ROOT_DIR / "config" / "google_credentials.json")
 )
+GDRIVE_TOKEN_PATH: str = os.getenv(
+    "GDRIVE_TOKEN_PATH", str(ROOT_DIR / "config" / "gdrive_token.json")
+)
 GDRIVE_DOWNLOAD_DIR: str = str(RAW_DIR / "gdrive")
 
 # ── Logging ───────────────────────────────────────────────────────────────────

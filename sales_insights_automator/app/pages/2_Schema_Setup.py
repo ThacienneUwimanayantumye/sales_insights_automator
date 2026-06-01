@@ -14,14 +14,18 @@ import pandas as pd
 import streamlit as st
 
 from app import state
+from app.theme import apply_page_theme
 from config.schema import SchemaConfig, ALL_ROLES, REQUIRED_ROLES, ROLE_DESCRIPTIONS, ROLE_LABELS
 from profiling.schema_wizard import SchemaWizard
 from cleaning.cleaner import DataCleaner
 from cleaning.config import CleaningConfig
 from cleaning.functions import normalize_column_names
 from analysis.analyzer import SalesAnalyzer
+from analysis.prepare_df import prepare_analysis_dataframe
 
 st.set_page_config(page_title="Schema Setup", page_icon="🔧", layout="wide")
+
+apply_page_theme()
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 st.sidebar.title("📊 Sales Insights")
@@ -154,17 +158,16 @@ if st.button("Apply Schema & Run Analysis", type="primary", disabled=apply_disab
         # mapping already uses normalized column names (from norm_df detection).
         # DataCleaner with normalize_columns=True produces the same names, so
         # schema.rename_to_standard() will find every mapped column correctly.
-        date_col    = mapping.get("date")   # already normalized, e.g. "date"
-        type_convs  = {date_col: "datetime"} if date_col else {}
-
         config  = CleaningConfig(
             normalize_columns = True,
             drop_duplicates   = True,
-            type_conversions  = type_convs,
+            duplicate_subset  = [schema.order_id] if schema.order_id else None,
+            type_conversions  = schema.cleaning_type_conversions(),
         )
         cleaner  = DataCleaner(config)
         clean_df = cleaner.clean(raw_df)    # raw_df → columns normalized
         clean_df = schema.rename_to_standard(clean_df)   # e.g. total_amount → revenue
+        clean_df = prepare_analysis_dataframe(clean_df)
         state.set(state.CLEAN_DF, clean_df)
         state.set(state.CLEANING_REPORT, cleaner.report)
 

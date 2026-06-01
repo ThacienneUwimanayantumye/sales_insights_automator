@@ -71,6 +71,30 @@ def normalize_column_names(df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict[str, st
     return df, renamed
 
 
+def dedupe_column_names(df: pd.DataFrame) -> pd.DataFrame:
+    """Ensure column labels are unique so ``df[name]`` is always a Series.
+
+    Duplicate labels (common after some nested JSON flattening paths) make
+    ``df[col]`` return a DataFrame and break code that uses ``.dtype`` or
+    ``.map`` on a single column.
+    """
+    df = df.copy()
+    if len(df.columns) == len(set(map(str, df.columns))):
+        return df
+    seen: Dict[str, int] = {}
+    new_cols: List[str] = []
+    for c in df.columns:
+        label = str(c)
+        if label not in seen:
+            seen[label] = 0
+            new_cols.append(label)
+        else:
+            seen[label] += 1
+            new_cols.append(f"{label}__{seen[label]}")
+    df.columns = new_cols
+    return df
+
+
 # ── 2. Duplicate removal ──────────────────────────────────────────────────────
 
 def drop_duplicate_rows(

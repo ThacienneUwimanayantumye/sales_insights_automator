@@ -33,6 +33,7 @@ import pandas as pd
 
 from analysis import metrics as m
 from analysis import trends  as t
+from analysis.prepare_df import prepare_analysis_dataframe
 from analysis.insight_builder import AnalysisResult
 from config.schema import SchemaConfig
 
@@ -143,6 +144,8 @@ class SalesAnalyzer:
             df = self.schema.rename_to_standard(df)
             print(f"[SalesAnalyzer] Schema mapping applied — "
                   f"{len(self.schema.mapped_roles())} roles mapped.")
+
+        df = prepare_analysis_dataframe(df)
 
         print(f"[SalesAnalyzer] Starting analysis on {len(df):,} rows...")
 

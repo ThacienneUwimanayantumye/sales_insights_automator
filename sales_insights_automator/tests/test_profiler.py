@@ -74,6 +74,15 @@ class TestDuplicates:
         # 1 out of 6 rows = 16.67%
         assert p.duplicate_pct == pytest.approx(16.67, abs=0.1)
 
+    def test_duplicates_with_list_cells(self, profiler):
+        """Nested JSON columns must not crash duplicated()."""
+        df = pd.DataFrame({
+            "id": [1, 2, 2],
+            "nested": [[1], [2], [2]],
+        })
+        p = profiler.profile(df)
+        assert p.duplicate_rows == 1
+
 
 # ── Null detection ────────────────────────────────────────────────────────────
 
@@ -122,6 +131,22 @@ class TestConstantColumns:
     def test_non_constant_not_flagged(self, profiler, clean_df):
         p = profiler.profile(clean_df)
         assert p.constant_columns == []
+
+
+class TestNestedJsonCells:
+    """Object columns that hold list/dict values (common after json_normalize)."""
+
+    def test_nunique_does_not_raise(self, profiler):
+        df = pd.DataFrame({
+            "id": [1],
+            "tags": [["a", "b"]],
+            "name": ["x"],
+        })
+        p = profiler.profile(df)
+        assert p.total_rows == 1
+        tags = p.get_column("tags")
+        assert tags is not None
+        assert tags.unique_count == 1
 
 
 # ── Numeric statistics ────────────────────────────────────────────────────────

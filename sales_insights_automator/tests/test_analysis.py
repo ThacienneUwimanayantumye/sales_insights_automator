@@ -243,6 +243,66 @@ class TestAnalysisResult:
         assert str(result.row_count) in repr(result)
 
 
+class TestCoerceStandardNumericColumns:
+    """Guards against object-dtyped JSON numerics (pandas string sum = concat)."""
+
+    def test_coerces_string_revenue_to_float(self):
+        df = pd.DataFrame({
+            "order_id": ["a", "b"],
+            "date": pd.to_datetime(["2024-01-01", "2024-01-02"]),
+            "revenue": ["100.50", "200.25"],
+        })
+        out = m.coerce_standard_numeric_columns(df)
+        assert pd.api.types.is_float_dtype(out["revenue"])
+        assert float(out["revenue"].sum()) == pytest.approx(300.75)
+
+    def test_analyzer_runs_with_object_string_revenue(self):
+        df = pd.DataFrame({
+            "order_id": ["x1", "x2", "x3"],
+            "date": pd.to_datetime(["2024-01-01", "2024-02-01", "2024-03-01"]),
+            "product":     ["p", "p", "p"],
+            "category":    ["c", "c", "c"],
+            "region":      ["N", "S", "E"],
+            "sales_rep":   ["a", "b", "c"],
+            "quantity":    ["1", "2", "1"],
+            "unit_price":  ["10.0", "10.0", "10.0"],
+            "discount_pct":["0", "0", "0"],
+            "revenue":     ["10.5", "20.5", "30.0"],
+        })
+        result = SalesAnalyzer().analyze(df)
+        assert result.summary_stats["total_revenue"] == pytest.approx(61.0)
+
+
+class TestPrepareAnalysisDataframe:
+    """Nested JSON cells in dimensions must not break groupby operations."""
+
+    def test_list_region_monthly_trend(self):
+        df = pd.DataFrame({
+            "order_id": ["a", "b"],
+            "date": pd.to_datetime(["2024-01-15", "2024-02-15"]),
+            "revenue": [100.0, 200.0],
+            "region": [["North"], ["South"]],
+        })
+        ready = m.prepare_analysis_dataframe(df)
+        out = t.monthly_revenue_by_region(ready)
+        assert not out.empty
+
+    def test_analyzer_succeeds_with_mixed_list_and_scalar_region(self):
+        df = pd.DataFrame({
+            "order_id": ["a", "b", "c"],
+            "date": pd.to_datetime(["2024-01-15", "2024-02-15", "2024-03-15"]),
+            "revenue": [10.0, 20.0, 30.0],
+            "region": [["East"], "West", "West"],
+            "product": ["p", "p", "p"],
+            "category": ["c", "c", "c"],
+            "sales_rep": ["x", "y", "z"],
+        })
+        result = SalesAnalyzer().analyze(df)
+        assert result.revenue_by_region is not None
+        assert not result.revenue_by_region.empty
+        assert result.regional_trend is not None
+
+
 # ── TestSalesAnalyzer (integration) ──────────────────────────────────────────
 
 class TestSalesAnalyzer:

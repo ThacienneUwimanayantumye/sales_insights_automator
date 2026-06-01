@@ -146,4 +146,4 @@ if __name__ == "__main__":
     df = generate_sales_records(n=500)
     save_csv(df, SAMPLE_CSV_PATH)
     save_sqlite(df, SAMPLE_SQLITE_PATH)
-    print("\nSample data ready. Run demo_ingestion.py to test the connectors.")
+    print("\nSample data ready. Use the Streamlit app (Upload & Profile) or scripts/demo_ingestion.py.")

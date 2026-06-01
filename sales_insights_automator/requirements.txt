@@ -14,10 +14,10 @@ fpdf2>=2.7.0
 # ── Kaggle connector ──────────────────────────────────────────────────────────
 kaggle>=1.6.0
 
-# ── Google Drive connector (stub — install when implementing) ─────────────────
-# google-api-python-client>=2.130.0
-# google-auth-oauthlib>=1.2.0
-# google-auth-httplib2>=0.2.0
+# ── Google Drive connector ────────────────────────────────────────────────────
+google-api-python-client>=2.130.0
+google-auth-oauthlib>=1.2.0
+google-auth-httplib2>=0.2.0
 
 # ── Environment variable management ──────────────────────────────────────────
 python-dotenv>=1.0.0

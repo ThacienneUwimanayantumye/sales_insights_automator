@@ -7,14 +7,25 @@ Run from the project root:
     python scripts/demo_ingestion.py
 
 Expected output: row counts, schema, and a sample of the loaded data.
+
+Optional live Google Drive demo: set ``GDRIVE_DEMO_FILE_ID`` in ``.env`` and
+ensure credentials (service account or OAuth token) are configured.
 """
 
+import os
 import sys
 from pathlib import Path
 
 # Allow running from any directory
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
+
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv(PROJECT_ROOT / ".env", override=False)
+except ImportError:
+    pass
 
 from config.settings import SAMPLE_CSV_PATH, SAMPLE_SQLITE_PATH
 from ingestion.csv_source import CSVSource
@@ -112,18 +123,27 @@ def demo_sqlite_view() -> None:
     print(f"\n[SQLite/view] Monthly revenue sample:\n{df.to_string(index=False)}")
 
 
-# ── Demo 5 — GoogleDriveSource stub ──────────────────────────────────────────
+# ── Demo 5 — GoogleDriveSource (optional live) ────────────────────────────────
 
-def demo_google_drive_stub() -> None:
-    section("DEMO 5 — GoogleDriveSource (stub — expected NotImplementedError)")
+def demo_google_drive() -> None:
+    section("DEMO 5 — GoogleDriveSource")
 
-    source = GoogleDriveSource(file_id="some_fake_file_id_here")
+    file_id = os.getenv("GDRIVE_DEMO_FILE_ID", "").strip()
+    if not file_id:
+        print(
+            "[GoogleDriveSource] Skipped — set GDRIVE_DEMO_FILE_ID in .env "
+            "to run a live Drive download (CSV/TSV or Google Sheet)."
+        )
+        return
+
+    source = GoogleDriveSource(file_id=file_id)
     print(f"Connector  : {source.describe()}")
+    print(f"Validation : {source.validate()}")
 
-    try:
-        source.load_validated()
-    except NotImplementedError as exc:
-        print(f"[GoogleDriveSource] Caught expected NotImplementedError: {exc}")
+    df = source.load_validated()
+    print(f"\n[GoogleDrive] Shape: {df.shape[0]:,} rows × {df.shape[1]} columns")
+    print(f"[GoogleDrive] Columns: {list(df.columns)}")
+    print(f"\n[GoogleDrive] First 3 rows:\n{df.head(3).to_string(index=False)}")
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
@@ -136,7 +156,7 @@ if __name__ == "__main__":
     demo_sqlite_table()
     demo_sqlite_query()
     demo_sqlite_view()
-    demo_google_drive_stub()
+    demo_google_drive()
 
     print(f"\n{'=' * 60}")
     print("All ingestion demos complete.")

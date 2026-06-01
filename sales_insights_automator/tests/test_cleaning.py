@@ -189,6 +189,22 @@ class TestNormalizeColumns:
         assert list(df.columns) == original_cols
 
 
+# ── dedupe_column_names ───────────────────────────────────────────────────────
+
+
+class TestDedupeColumnNames:
+
+    def test_renames_duplicate_labels(self):
+        df = pd.DataFrame([[1, 2, 3]], columns=["x", "x", "y"])
+        out = fn.dedupe_column_names(df)
+        assert list(out.columns) == ["x", "x__1", "y"]
+        assert isinstance(out["x"], pd.Series)
+
+    def test_no_op_when_unique(self, sample_df):
+        out = fn.dedupe_column_names(sample_df)
+        assert list(out.columns) == list(sample_df.columns)
+
+
 # ── drop_duplicate_rows ───────────────────────────────────────────────────────
 
 class TestDropDuplicates:

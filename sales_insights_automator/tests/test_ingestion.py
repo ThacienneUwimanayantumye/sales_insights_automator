@@ -11,8 +11,8 @@ if the sample files do not yet exist.
 import os
 import sqlite3
 import sys
-import tempfile
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pandas as pd
 import pytest
@@ -180,20 +180,76 @@ class TestSQLiteSource:
             source.load_validated()
 
 
-# ── GoogleDriveSource (stub) ──────────────────────────────────────────────────
+# ── GoogleDriveSource ─────────────────────────────────────────────────────────
 
-class TestGoogleDriveSourceStub:
+class TestGoogleDriveSource:
 
-    def test_load_raises_not_implemented(self):
-        source = GoogleDriveSource(file_id="fake_id")
-        with pytest.raises(NotImplementedError):
-            source.load()
+    def test_validate_ok(self, monkeypatch):
+        mock_svc = MagicMock()
+        mock_svc.files().get.return_value.execute.return_value = {
+            "id": "abc123",
+            "name": "sales.csv",
+            "mimeType": "text/csv",
+        }
 
-    def test_validate_raises_not_implemented(self):
-        source = GoogleDriveSource(file_id="fake_id")
-        with pytest.raises(NotImplementedError):
-            source.validate()
+        monkeypatch.setattr(
+            "ingestion.google_drive_source._build_drive_service",
+            lambda *_args, **_kw: mock_svc,
+        )
 
-    def test_describe_mentions_stub(self):
-        source = GoogleDriveSource(file_id="fake_id")
-        assert "STUB" in source.describe()
+        src = GoogleDriveSource(file_id="abc123", credentials_path="/fake/creds.json")
+        assert src.validate() is True
+
+    def test_validate_missing_deps_message(self, monkeypatch):
+        def boom(*_a, **_k):
+            raise DataSourceError("pip install google-api-python-client")
+
+        monkeypatch.setattr(
+            "ingestion.google_drive_source._build_drive_service", boom
+        )
+        src = GoogleDriveSource(file_id="x", credentials_path="/fake/creds.json")
+        assert src.validate() is False
+
+    def test_validate_rejects_wrong_mime(self, monkeypatch):
+        mock_svc = MagicMock()
+        mock_svc.files().get.return_value.execute.return_value = {
+            "id": "x",
+            "name": "report.pdf",
+            "mimeType": "application/pdf",
+        }
+        monkeypatch.setattr(
+            "ingestion.google_drive_source._build_drive_service",
+            lambda *_a, **_k: mock_svc,
+        )
+        src = GoogleDriveSource(file_id="x", credentials_path="/fake/creds.json")
+        assert src.validate() is False
+
+    def test_load_validated_sheet_export(self, monkeypatch):
+        mock_svc = MagicMock()
+        mock_svc.files().get.return_value.execute.return_value = {
+            "id": "sh1",
+            "name": "Q1 Sheet",
+            "mimeType": "application/vnd.google-apps.spreadsheet",
+        }
+
+        def fake_download_raw_bytes(self, service, meta):
+            assert meta["mimeType"] == "application/vnd.google-apps.spreadsheet"
+            return b"a,b\n1,2\n"
+
+        monkeypatch.setattr(
+            "ingestion.google_drive_source._build_drive_service",
+            lambda *_a, **_k: mock_svc,
+        )
+        monkeypatch.setattr(
+            GoogleDriveSource, "_download_raw_bytes", fake_download_raw_bytes
+        )
+
+        src = GoogleDriveSource(file_id="sh1", credentials_path="/fake/creds.json")
+        df = src.load_validated()
+        assert list(df.columns)[:2] == ["a", "b"]
+        assert df.iloc[0]["a"] == 1
+        assert "_source_file" in df.columns
+
+    def test_describe_contains_file_id(self):
+        src = GoogleDriveSource(file_id="myid", credentials_path="/x.json")
+        assert "myid" in src.describe()

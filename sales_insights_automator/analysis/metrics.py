@@ -35,6 +35,41 @@ COL_DISCOUNT    = "discount_pct"
 COL_REVENUE     = "revenue"
 
 
+def coerce_standard_numeric_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Force standard analysis columns to numeric dtypes when needed.
+
+    JSON exports often leave numbers as strings.  Summing an object column of
+    numeric strings **concatenates** them in pandas, producing invalid values
+    and ``float()`` conversion errors downstream.
+    """
+    df = df.copy()
+    float_cols = (
+        COL_REVENUE,
+        COL_UNIT_PRICE,
+        COL_DISCOUNT,
+        "profit",
+        "cost",
+        "rating",
+    )
+    int_cols = (COL_QUANTITY, "age")
+
+    for col in float_cols:
+        if col not in df.columns:
+            continue
+        if pd.api.types.is_numeric_dtype(df[col]):
+            continue
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+
+    for col in int_cols:
+        if col not in df.columns:
+            continue
+        if pd.api.types.is_numeric_dtype(df[col]):
+            continue
+        df[col] = pd.to_numeric(df[col], errors="coerce").astype("Int64")
+
+    return df
+
+
 # ── 1. Top-level summary statistics ──────────────────────────────────────────
 
 def compute_summary_stats(df: pd.DataFrame) -> Dict[str, float]:
@@ -295,3 +330,7 @@ def category_region_crosstab(df: pd.DataFrame) -> pd.DataFrame:
     pivot["Total"] = pivot.sum(axis=1)
     pivot.loc["Total"] = pivot.sum(axis=0)
     return pivot
+
+
+# Re-export from prepare_df (standalone module — reliable under Streamlit reloads).
+from analysis.prepare_df import prepare_analysis_dataframe, stringify_nested_object_cells  # noqa: E402

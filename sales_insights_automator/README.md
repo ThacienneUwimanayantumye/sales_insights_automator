@@ -35,14 +35,14 @@ internals of another — they communicate only through DataFrames.
 sales_insights_automator/
 ├── config/
 │   ├── settings.py          # Centralised config + env vars
-│   └── google_credentials.json  # (gitignored) Drive service account
+│   └── google_credentials.json  # (gitignored) Drive OAuth or service account
 │
 ├── ingestion/               # Stage 1 — pluggable data source connectors
 │   ├── base.py              # DataSource abstract base class
 │   ├── csv_source.py        # CSVSource
 │   ├── sqlite_source.py     # SQLiteSource
 │   ├── kaggle_source.py     # KaggleSource
-│   └── google_drive_source.py  # GoogleDriveSource (stub)
+│   └── google_drive_source.py  # GoogleDriveSource (Drive API v3, CSV/TSV/Sheets)
 │
 ├── profiling/               # Stage 1b — data quality report before cleaning
 │   └── profiler.py          # DataProfiler → DataProfile (+ ColumnProfile)
@@ -249,7 +249,7 @@ python scripts/demo_profiler.py   # runs on clean + deliberately dirty data
 | `CSVSource` | ✅ Production-ready | Supports single file or glob pattern |
 | `SQLiteSource` | ✅ Production-ready | Table name or raw SQL query |
 | `KaggleSource` | ✅ Functional | Requires `~/.kaggle/kaggle.json` |
-| `GoogleDriveSource` | 🚧 Stub | Interface defined, implementation pending |
+| `GoogleDriveSource` | ✅ Functional | Service account or OAuth; see `.env.example` and `scripts/setup_gdrive_oauth.py` |
 
 ### Adding a new connector
 

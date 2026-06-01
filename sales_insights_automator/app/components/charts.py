@@ -18,13 +18,32 @@ ACCENT    = "#F59E0B"   # amber
 DANGER    = "#EF4444"   # red
 GREY      = "#6B7280"
 # Transparent chart canvas (shows Streamlit / container behind it).
-# Plotly's "Download plot as PNG" composites transparency onto a dark matte, so
-# layout titles must stay light; axes/legend stay a normal grey for the app UI.
 BG                = "rgba(0,0,0,0)"
-CHART_TITLE_COLOR = "#F9FAFB"
+# Fallback when theme module is unavailable (e.g. offline scripts).
+CHART_TITLE_COLOR = "#111827"
 
 PALETTE = [PRIMARY, SECONDARY, ACCENT, "#8B5CF6", "#EC4899",
            "#14B8A6", "#F97316", "#06B6D4"]
+
+
+def _plot_theme():
+    try:
+        from app.theme import plot_theme
+        return plot_theme()
+    except Exception:
+        from app.theme import PlotTheme
+        return PlotTheme(
+            title=CHART_TITLE_COLOR,
+            text="#374151",
+            muted="#6B7280",
+            grid="#F3F4F6",
+            hover_bg="#FFFFFF",
+            hover_text="#111827",
+            gauge_tick="#64748B",
+            polar_grid="#E5E7EB",
+            polar_tick="#4B5563",
+            annotation="#374151",
+        )
 
 # Maps internal column names → human-readable axis / legend labels.
 # "category" is the standard internal name for the product-category column,
@@ -66,18 +85,44 @@ def _label(col: str) -> str:
 
 
 def _base_layout(fig: go.Figure, title: str = "") -> go.Figure:
+    t = _plot_theme()
     fig.update_layout(
-        title=dict(text=title, font=dict(size=17, color=CHART_TITLE_COLOR)),
+        title=dict(text=title, font=dict(size=17, color=t.title)),
         paper_bgcolor=BG,
         plot_bgcolor=BG,
-        font=dict(family="Inter, sans-serif", color="#374151"),
+        font=dict(family="Inter, sans-serif", color=t.text),
         margin=dict(l=10, r=10, t=44, b=10),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02,
-                    xanchor="right", x=1),
-        hoverlabel=dict(bgcolor="white", font_size=13),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1,
+            font=dict(color=t.text),
+        ),
+        hoverlabel=dict(bgcolor=t.hover_bg, font_color=t.hover_text, font_size=13),
     )
-    fig.update_xaxes(showgrid=False, zeroline=False)
-    fig.update_yaxes(showgrid=True, gridcolor="#F3F4F6", zeroline=False)
+    fig.update_xaxes(
+        showgrid=False,
+        zeroline=False,
+        tickfont=dict(color=t.muted),
+        title_font=dict(color=t.text),
+    )
+    fig.update_yaxes(
+        showgrid=True,
+        gridcolor=t.grid,
+        zeroline=False,
+        tickfont=dict(color=t.muted),
+        title_font=dict(color=t.text),
+    )
+    fig.update_traces(textfont=dict(color=t.text))
+    # Merge legend colours without wiping orientation / title set by callers.
+    fig.update_layout(
+        legend=dict(
+            font=dict(color=t.text),
+            title=dict(font=dict(color=t.text)),
+        ),
+    )
     return fig
 
 
@@ -316,12 +361,13 @@ def regional_trend(df: pd.DataFrame) -> go.Figure:
 
 def discount_gauge(avg_discount_pct: float) -> go.Figure:
     """Gauge chart showing average discount level."""
+    t = _plot_theme()
     fig = go.Figure(go.Indicator(
         mode  = "gauge+number",
         value = avg_discount_pct,
-        number = dict(suffix="%", font=dict(size=28, color=CHART_TITLE_COLOR)),
+        number = dict(suffix="%", font=dict(size=28, color=t.title)),
         gauge = dict(
-            axis  = dict(range=[0, 30], tickfont=dict(color="#94A3B8")),
+            axis  = dict(range=[0, 30], tickfont=dict(color=t.gauge_tick)),
             bar   = dict(color=PRIMARY),
             steps = [
                 dict(range=[0, 5],   color="#D1FAE5"),
@@ -333,7 +379,7 @@ def discount_gauge(avg_discount_pct: float) -> go.Figure:
                 value = 20,
             ),
         ),
-        title = dict(text="Avg Discount", font=dict(size=14, color=CHART_TITLE_COLOR)),
+        title = dict(text="Avg Discount", font=dict(size=14, color=t.title)),
     ))
     fig.update_layout(
         height=200,
@@ -359,7 +405,7 @@ def category_heatmap(pivot_df: pd.DataFrame) -> go.Figure:
         text_auto              = ",.0f",
         aspect                 = "auto",
     )
-    fig.update_traces(textfont=dict(size=11))
+    fig.update_traces(textfont=dict(size=11, color=_plot_theme().text))
     fig.update_layout(
         coloraxis_showscale = False,
         xaxis_title         = "Region",
@@ -388,6 +434,7 @@ def revenue_donut(
         hole         = 0.55,
         marker       = dict(colors=PALETTE),
         textinfo     = "label+percent",
+        textfont     = dict(color=_plot_theme().text),
         hovertemplate = (
             "<b>%{label}</b><br>"
             "Revenue: $%{value:,.0f}<br>"
@@ -396,7 +443,7 @@ def revenue_donut(
     ))
     fig.update_layout(
         showlegend = True,
-        legend     = dict(orientation="v", x=1.0, y=0.5),
+        legend     = dict(orientation="v", x=1.0, y=0.5, font=dict(color=_plot_theme().text)),
         margin     = dict(l=10, r=120, t=40, b=10),
     )
     return _base_layout(fig, title)
@@ -430,7 +477,7 @@ def revenue_treemap(
             "Orders: %{customdata[1]:,}<extra></extra>"
         ),
         texttemplate  = "<b>%{label}</b><br>$%{value:,.0f}",
-        textfont      = dict(size=13),
+        textfont      = dict(size=13, color=_plot_theme().text),
     )
     fig.update_layout(
         coloraxis_showscale = False,
@@ -438,7 +485,8 @@ def revenue_treemap(
         paper_bgcolor       = BG,
         plot_bgcolor        = BG,
     )
-    fig.update_layout(title=dict(text=title, font=dict(size=17, color=CHART_TITLE_COLOR)))
+    t = _plot_theme()
+    fig.update_layout(title=dict(text=title, font=dict(size=17, color=t.title)))
     return fig
 
 
@@ -506,7 +554,7 @@ def revenue_histogram(clean_df: pd.DataFrame, revenue_col: str = "revenue") -> g
     if revenue_col not in clean_df.columns:
         fig = go.Figure()
         fig.add_annotation(text="Revenue column not available",
-                           showarrow=False, font=dict(size=14, color="#374151"))
+                           showarrow=False, font=dict(size=14, color=_plot_theme().annotation))
         return _base_layout(fig, "Transaction Amount Distribution")
 
     fig = px.histogram(
@@ -538,6 +586,7 @@ def weekday_polar(weekday_df: pd.DataFrame) -> go.Figure:
     non-technical users than a standard bar chart.
     """
     df = weekday_df.copy()
+    t = _plot_theme()
 
     fig = go.Figure(go.Barpolar(
         r           = df["total_revenue"],
@@ -555,13 +604,13 @@ def weekday_polar(weekday_df: pd.DataFrame) -> go.Figure:
                 visible    = True,
                 tickprefix = "$",
                 tickformat = ",.0f",
-                gridcolor  = "#E5E7EB",
-                tickfont=dict(color="#4B5563", size=10),
+                gridcolor  = t.polar_grid,
+                tickfont=dict(color=t.polar_tick, size=10),
             ),
             angularaxis = dict(
                 direction = "clockwise",
                 rotation  = 90,
-                tickfont=dict(color="#4B5563", size=11),
+                tickfont=dict(color=t.polar_tick, size=11),
             ),
             bgcolor = BG,
         ),
@@ -571,7 +620,7 @@ def weekday_polar(weekday_df: pd.DataFrame) -> go.Figure:
     )
     fig.update_layout(title=dict(
         text="Revenue by Day of Week",
-        font=dict(size=17, color=CHART_TITLE_COLOR),
+        font=dict(size=17, color=t.title),
     ))
     return fig
 
@@ -714,7 +763,7 @@ def category_group_heatmap(
         text_auto              = ",.0f",
         aspect                 = "auto",
     )
-    fig.update_traces(textfont=dict(size=12))
+    fig.update_traces(textfont=dict(size=12, color=_plot_theme().text))
     fig.update_layout(
         coloraxis_showscale = False,
         xaxis_title         = _label(group_col),
@@ -725,7 +774,7 @@ def category_group_heatmap(
     )
     fig.update_layout(title=dict(
         text=title or f"Revenue Heatmap: {category_col.title()} × {group_col.title()}",
-        font=dict(size=17, color=CHART_TITLE_COLOR),
+        font=dict(size=17, color=_plot_theme().title),
     ))
     return fig
 
@@ -757,7 +806,7 @@ def scatter_qty_revenue(
     if qty_col not in clean_df.columns or revenue_col not in clean_df.columns:
         fig = go.Figure()
         fig.add_annotation(text="Quantity and/or revenue column not available",
-                           showarrow=False, font=dict(size=14, color="#374151"))
+                           showarrow=False, font=dict(size=14, color=_plot_theme().annotation))
         return _base_layout(fig, "Quantity vs Revenue")
 
     has_category = category_col in clean_df.columns
@@ -852,7 +901,7 @@ def metric_by_dimension(
     if metric_col not in df.columns or dim_col not in df.columns:
         fig = go.Figure()
         fig.add_annotation(text=f"Column '{metric_col}' or '{dim_col}' not found",
-                           showarrow=False, font=dict(size=13, color="#374151"))
+                           showarrow=False, font=dict(size=13, color=_plot_theme().annotation))
         return _base_layout(fig, f"{_label(metric_col)} by {_label(dim_col)}")
 
     grouped = (
@@ -906,7 +955,7 @@ def metric_distribution(
     if metric_col not in df.columns:
         fig = go.Figure()
         fig.add_annotation(text=f"Column '{metric_col}' not available",
-                           showarrow=False, font=dict(size=13, color="#374151"))
+                           showarrow=False, font=dict(size=13, color=_plot_theme().annotation))
         return _base_layout(fig, _label(metric_col))
 
     series = pd.to_numeric(df[metric_col], errors="coerce").dropna()

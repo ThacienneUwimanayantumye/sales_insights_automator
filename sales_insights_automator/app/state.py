@@ -24,6 +24,7 @@ CLEANING_REPORT = "cleaning_report"  # CleaningReport
 ANALYSIS_RESULT = "analysis_result"  # AnalysisResult
 INSIGHT_REPORT  = "insight_report"   # InsightReport
 FILE_NAME       = "file_name"        # str — display name of uploaded file
+UI_THEME        = "ui_theme"         # str — "light" | "dark" dashboard appearance
 EXTRA_DIMS      = "extra_dims"       # list[str] — discovered dimension columns
 EXTRA_METRICS   = "extra_metrics"    # list[str] — discovered metric columns
 

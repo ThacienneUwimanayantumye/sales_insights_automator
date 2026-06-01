@@ -18,10 +18,13 @@ load_dotenv(dotenv_path=_env_path, override=True)
 
 import streamlit as st
 from app import state
+from app.theme import apply_page_theme
 from ai.insight_generator import InsightGenerator
 from privacy.config import PrivacyConfig
 
 st.set_page_config(page_title="AI Insights", page_icon="🤖", layout="wide")
+
+apply_page_theme()
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 st.sidebar.title("📊 Sales Insights")

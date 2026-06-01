@@ -455,6 +455,24 @@ class DataProfiler:
         self.likely_id_threshold        = likely_id_threshold
         self.outlier_iqr_multiplier     = outlier_iqr_multiplier
 
+    @staticmethod
+    def _hashable_objects(series: pd.Series) -> pd.Series:
+        """Convert list/dict/set cells to stable strings so pandas can hash them.
+
+        JSON-normalised frames often store nested structures in object columns;
+        :meth:`Series.nunique`, :meth:`value_counts`, and :meth:`DataFrame.duplicated`
+        require hashable elements and otherwise raise ``TypeError``.
+        """
+        def norm(v: Any) -> Any:
+            if isinstance(v, (list, dict, set)):
+                try:
+                    return json.dumps(v, sort_keys=True, default=str)
+                except (TypeError, ValueError):
+                    return repr(v)
+            return v
+
+        return series.map(norm)
+
     def profile(self, df: pd.DataFrame) -> DataProfile:
         """Run the full profiling analysis and return a DataProfile.
 
@@ -474,7 +492,14 @@ class DataProfiler:
 
         total_nulls   = int(df.isnull().sum().sum())
         null_density  = round(total_nulls / (n_rows * n_cols) * 100, 4) if n_rows * n_cols else 0
-        dup_rows      = int(df.duplicated().sum())
+        try:
+            dup_rows = int(df.duplicated().sum())
+        except TypeError:
+            dup_view = df.copy()
+            for c in dup_view.columns:
+                if dup_view[c].dtype == object:
+                    dup_view[c] = self._hashable_objects(dup_view[c])
+            dup_rows = int(dup_view.duplicated().sum())
         mem_mb        = round(df.memory_usage(deep=True).sum() / 1024 / 1024, 3)
 
         cols_with_nulls    = [c.name for c in col_profiles if c.has_nulls]
@@ -518,17 +543,24 @@ class DataProfiler:
         n_rows: int,
     ) -> ColumnProfile:
         series       = df[col]
+        if isinstance(series, pd.DataFrame):
+            series = series.iloc[:, 0]
         null_count   = int(series.isnull().sum())
         null_pct     = round(null_count / n_rows * 100, 2) if n_rows else 0
-        non_null     = series.dropna()
-        unique_count = int(non_null.nunique())
+        non_null      = series.dropna()
+        hashable_view = (
+            self._hashable_objects(non_null)
+            if non_null.dtype == object
+            else non_null
+        )
+        unique_count = int(hashable_view.nunique())
         cardinality  = round(unique_count / n_rows * 100, 2) if n_rows else 0
         is_constant  = unique_count == 1
         is_likely_id = cardinality >= self.likely_id_threshold
 
         kind = self._infer_kind(series)
         sample_values = [
-            str(v) for v in non_null.unique()[:5].tolist()
+            str(v) for v in hashable_view.unique()[:5].tolist()
         ]
 
         base = dict(
@@ -547,7 +579,7 @@ class DataProfiler:
         if kind == "numeric":
             return ColumnProfile(**base, **self._numeric_stats(non_null, n_rows))
         elif kind == "categorical":
-            return ColumnProfile(**base, **self._categorical_stats(non_null, n_rows))
+            return ColumnProfile(**base, **self._categorical_stats(hashable_view, n_rows))
         else:
             return ColumnProfile(**base)
 

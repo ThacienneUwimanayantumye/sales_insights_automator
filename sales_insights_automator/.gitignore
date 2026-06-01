@@ -13,6 +13,8 @@ env/
 .env
 # Keep the example template
 !.env.example
+config/google_credentials.json
+config/gdrive_token.json
 
 # ── Test / lint caches ────────────────────────────────────────────────────────
 .pytest_cache/

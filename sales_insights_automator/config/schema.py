@@ -52,7 +52,7 @@ Usage
 import json
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 import pandas as pd
 
@@ -72,6 +72,21 @@ OPTIONAL_ROLES = ("product", "category", "region", "sales_rep",
                   "customer_segment", "return_flag", "rating")
 
 ALL_ROLES = REQUIRED_ROLES + OPTIONAL_ROLES
+
+# Role → dtype for ``CleaningConfig.type_conversions`` (source column names,
+# before ``rename_to_standard``).  Keeps JSON/CSV numeric fields from staying
+# as object/string — otherwise ``.sum()`` concatenates strings and breaks KPIs.
+_CLEANING_DTYPES_FOR_ROLES: Dict[str, str] = {
+    "date": "datetime",
+    "revenue": "float",
+    "quantity": "int",
+    "unit_price": "float",
+    "discount": "float",
+    "profit": "float",
+    "cost": "float",
+    "age": "int",
+    "rating": "float",
+}
 
 # Maps role name → the column name the analysis layer expects after renaming.
 # All roles map to themselves EXCEPT "discount", whose standard column name
@@ -239,6 +254,19 @@ class SchemaConfig:
         """Return only the roles that have a non-None mapping."""
         return {role: getattr(self, role) for role in ALL_ROLES
                 if getattr(self, role) is not None}
+
+    def cleaning_type_conversions(self) -> Dict[str, str]:
+        """Build ``type_conversions`` for :class:`cleaning.cleaner.DataCleaner`.
+
+        Uses each mapped role's *actual* column name (pre-standardisation) so
+        numeric fields are converted before ``rename_to_standard``.
+        """
+        out: Dict[str, str] = {}
+        for role, dtype in _CLEANING_DTYPES_FOR_ROLES.items():
+            col = getattr(self, role)
+            if col:
+                out[col] = dtype
+        return out
 
     def summary(self) -> str:
         """Return a human-readable summary of the current mapping."""
